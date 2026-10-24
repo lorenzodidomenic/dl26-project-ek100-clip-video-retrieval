@@ -100,11 +100,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--batch", type=int, default=8, help="clip per batch")
     parser.add_argument("--limit", type=int, help="processa solo le prime N sessioni (prova)")
+    parser.add_argument("--session", help="processa solo questa sessione, es. P22_01")
     parser.add_argument("--out", type=Path, default=ROOT / "data/features/timesformer_k400_8f")
     args = parser.parse_args()
 
     sessions = group_by_session(load_rows())
     video_ids = sorted(sessions)
+    if args.session:
+        video_ids = [v for v in video_ids if v == args.session]
     if args.limit:
         video_ids = video_ids[: args.limit]
     session_dir = args.out / "sessions"
