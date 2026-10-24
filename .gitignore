@@ -4,6 +4,7 @@ resources/
 env/
 __pycache__/
 *.pyc
+venv/
 
 /data/
 experiments/logs/
