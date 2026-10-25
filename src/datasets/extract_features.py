@@ -41,7 +41,7 @@ def frame_size(clip_path):
 # ritorna un array di frame per quella clip basata sugli indici nel manifest
 def read_frames(clip_path, frame_indices):
     w, h = frame_size(clip_path)
-    cmd = ["ffmpeg", "-loglevel", "error", "-i", str(clip_path),
+    cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-i", str(clip_path),
            "-vf", f"scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     raw = subprocess.run(cmd, capture_output=True, check=True).stdout
     frames = np.frombuffer(raw, np.uint8).reshape(-1, h, w, 3)
@@ -66,6 +66,13 @@ def group_by_session(rows):
 
 #funzione del processing
 # per ogni riga -> quindi per ogni clip -> applica l'encoding -> salva le features
+def is_complete(session_file, expected):
+    # un file esistente non basta: deve avere una riga per ogni clip attesa
+    if not session_file.exists():
+        return False
+    return len(np.load(session_file)["narration_id"]) == expected
+
+
 def process_session(encoder, rows, batch, out_file):
     features, ids = [], []
     for start in range(0, len(rows), batch):
@@ -113,7 +120,7 @@ def main():
     session_dir = args.out / "sessions"
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    todo = [v for v in video_ids if not (session_dir / f"{v}.npz").exists()]
+    todo = [v for v in video_ids if not is_complete(session_dir / f"{v}.npz", len(sessions[v]))]
     print(f"sessioni totali: {len(video_ids)} | da fare: {len(todo)}")
 
     encoder = TimesformerEncoder()

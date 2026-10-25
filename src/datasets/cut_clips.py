@@ -51,7 +51,7 @@ def find_session(video_id):
 def cut_clip(src, start, stop, dst):
     # -ss prima di -i: seek veloce. Con la ri-codifica il taglio resta preciso.
     cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
+        "ffmpeg", "-nostdin", "-y", "-loglevel", "error",
         "-ss", f"{start:.3f}", "-i", str(src), "-t", f"{stop - start:.3f}",
         "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
         str(dst),
