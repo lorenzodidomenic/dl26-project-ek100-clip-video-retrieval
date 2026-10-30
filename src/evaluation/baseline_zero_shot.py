@@ -24,9 +24,12 @@ Formati supportati per le feature:
 USO:
     python3 baseline_zero_shot.py
     python3 baseline_zero_shot.py --proj-dim 512 --seed 0
+
+Output: tabella a schermo e experiments/logs/baseline_zero_shot.csv
 """
 
 import argparse
+import csv
 import sys
 from pathlib import Path
 
@@ -46,6 +49,7 @@ SEED     = 42       # per riproducibilita' della matrice casuale
 # ============================================================================
 
 KS = (1, 5, 10)     # ranghi che vengono testati
+OUT = ROOT / "experiments/logs/baseline_zero_shot.csv"
 
 
 def proiezione_casuale(X, dim_out, seed):
@@ -76,6 +80,14 @@ def main():
 
     metriche = retrieval_metrics(S, exact_relevance(S.shape[0]), KS)
     print(metriche)
+
+    row = {"proj_dim": args.proj_dim, "seed": args.seed, **metriche}
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    with open(OUT, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    print(f"salvato: {OUT}")
 
 if __name__ == "__main__":
     main()
