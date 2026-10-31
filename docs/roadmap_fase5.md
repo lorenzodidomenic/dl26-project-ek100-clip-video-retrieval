@@ -11,7 +11,7 @@ Da seguire passo dopo passo. Ogni passo ha un obiettivo, le visualizzazioni da p
 |---|---|---|---|
 | 1–2 | Estrazione feature (TimeSformer, MPNet, BERT, CLIP) e split | fatto | `src/datasets/`, `data/features/` |
 | 3 | Baseline zero-shot: proiezione casuale, il "pavimento" | fatto | `src/evaluation/baseline_zero_shot.py` |
-| 4 | Allineamento lineare (ridge in forma chiusa), riferimento da battere | fatto (solo val) | `src/evaluation/linear_alignment.py` |
+| 4 | Allineamento lineare (ridge in forma chiusa), riferimento da battere | fatto (val e test) | `src/evaluation/linear_alignment.py` |
 | 5 | Modello allenato: teste MLP + loss InfoNCE | **da fare** | `src/training/` |
 | 6 | Metriche riusabili, analisi e estensioni | parziale | `src/evaluation/metrics.py` |
 
@@ -110,12 +110,12 @@ Un modello che, su **test**, fa text→video meglio della baseline lineare.
 | Modello | R@1 | R@5 | R@10 | rango mediano | classe R@10 | nuove combinazioni R@10 |
 |---|---|---|---|---|---|---|
 | Caso (K/N) | 0.04% | 0.22% | 0.44% | ~N/2 | — | — |
-| Ridge lineare | da calcolare su test | | | | | |
+| Ridge lineare (MPNet, λ=100) | 3.07% | 10.45% | 16.06% | 96 | 57.38% | 28.35% |
 | Contrastivo (MLP) | | | | | | |
 
 Riferimenti già noti:
 - **Baseline casuale (fase 3), test**: R@1 0.044%, R@5 0.133%, R@10 0.222%.
-- **Ridge lineare (fase 4), val, MPNet λ=100**: R@10 esatto 14.5%, R@10 classe 59.6%. Va calcolato anche sul test.
+- **Ridge lineare (fase 4), MPNet λ=100**: val R@10 esatto 14.5%, R@10 classe 59.6%; test R@10 esatto 16.06%, R@10 classe 57.38% (`experiments/logs/linear_alignment_test.csv`).
 
 **Criterio di successo:** supera il ridge su R@10 esatto e R@10 classe, sul val (per la scelta) e sul test (una volta sola).
 
@@ -262,7 +262,7 @@ Regole:
 ## 6. Checklist rapida
 
 - [x] P0 dati allineati e conteggi documentati
-- [ ] P1 ridge calcolato anche sul test
+- [x] P1 ridge calcolato anche sul test
 - [ ] P2 test di overfit superato
 - [ ] P3 prima run completa su MPNet
 - [ ] P4 config scelta sul val

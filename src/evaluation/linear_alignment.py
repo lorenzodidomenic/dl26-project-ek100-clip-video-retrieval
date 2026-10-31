@@ -1,4 +1,4 @@
-"""Allineamento lineare testo -> video e retrieval sul val, per scegliere il text encoder.
+"""Allineamento lineare testo -> video e retrieval, per scegliere il text encoder.
 
 Per ogni text encoder:
 1. sul train impara una matrice W che porta il testo nello spazio video (ridge regression,
@@ -13,7 +13,11 @@ Per ogni text encoder:
 Sceglierlo sul val e' un po' ottimista, ma allo stesso modo per tutti gli encoder.
 La riga "caso" usa similarita' casuali: e' il valore del retrieval senza alcuna informazione.
 
-Output: tabella a schermo e experiments/logs/linear_alignment.csv (tutte le combinazioni encoder x λ).
+Con --split test non si sceglie nulla: per ogni encoder si usa il λ migliore sul val (dal log di val)
+e si valuta una sola volta sul test, come riferimento.
+
+Output: tabella a schermo e experiments/logs/linear_alignment.csv (tutte le combinazioni encoder x λ),
+oppure experiments/logs/linear_alignment_test.csv con --split test.
 """
 import argparse
 import csv
@@ -31,6 +35,7 @@ ENCODERS = ["bert", "mpnet", "clip"]
 LAMBDAS = [1, 10, 100, 1000, 10000, 100000]
 CRITERION = "classe_R@10"
 OUT = ROOT / "experiments/logs/linear_alignment.csv"
+OUT_TEST = ROOT / "experiments/logs/linear_alignment_test.csv"
 
 
 def standardize(train, other):
@@ -63,12 +68,74 @@ def evaluate(sim, meta, unseen):
     return result
 
 
+def print_table(rows):
+    print(f"{'encoder':8}{'λ':>8}{'esatto R@1/5/10':>22}{'classe R@1/5/10':>22}{'rango classe':>14}{'nuove classe R@10':>19}")
+    for r in rows:
+        print(f"{r['encoder']:8}{str(r['lambda']):>8}"
+              f"{r['esatto_R@1']:>8.2f}{r['esatto_R@5']:>7.2f}{r['esatto_R@10']:>7.2f}"
+              f"{r['classe_R@1']:>8.2f}{r['classe_R@5']:>7.2f}{r['classe_R@10']:>7.2f}"
+              f"{r['classe_rango_mediano']:>14.0f}{r['nuove_classe_R@10']:>19.2f}")
+
+
+def write_rows(path, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"salvato: {path}")
+
+
+def best_val_lambdas():
+    # λ migliore sul val, letto dal log di val: il test non entra nella scelta
+    with open(OUT, newline="") as f:
+        rows = [r for r in csv.DictReader(f) if r["encoder"] in ENCODERS]
+    best = {}
+    for name in ENCODERS:
+        candidates = [r for r in rows if r["encoder"] == name]
+        best[name] = float(max(candidates, key=lambda r: float(r[CRITERION]))["lambda"])
+    return best
+
+
+def run_test(encoders, seed):
+    lambdas = best_val_lambdas()
+    rows = []
+    for name in encoders:
+        video_tr, text_tr, meta_tr = load_pair(name, "train")
+        video_te, text_te, meta_te = load_pair(name, "test")
+        text_tr, text_te = standardize(text_tr, text_te)
+        video_tr, video_te = standardize(video_tr, video_te)
+        unseen = unseen_mask(meta_tr, meta_te)
+        target = l2_normalize(video_te)
+
+        lam = lambdas[name]
+        W = ridge(text_tr, video_tr, lam)
+        sim = l2_normalize(text_te @ W) @ target.T          # (frasi test, video test)
+        rows.append({"encoder": name, "lambda": lam, **evaluate(sim, meta_te, unseen)})
+        print(f"{name:6} λ={lam:<9g} (scelto sul val) {CRITERION} = {rows[-1][CRITERION]:.2f}")
+
+    # riferimento: similarita' casuali, stesse clip del test
+    rng = np.random.default_rng(seed)
+    chance = {"encoder": "caso", "lambda": "", **evaluate(rng.random((len(meta_te["verb_class"]),) * 2), meta_te, unseen)}
+    rows.append(chance)
+
+    print(f"\ntest: {len(meta_te['verb_class'])} clip, di cui {int(unseen.sum())} con combinazioni nuove")
+    print_table(rows)
+    write_rows(OUT_TEST, rows)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--encoder", nargs="+", default=ENCODERS, choices=ENCODERS)
     parser.add_argument("--lambdas", nargs="+", type=float, default=LAMBDAS)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--split", default="val", choices=["val", "test"],
+                        help="test: usa il λ scelto sul val, una sola valutazione (ignora --lambdas)")
     args = parser.parse_args()
+
+    if args.split == "test":
+        run_test(args.encoder, args.seed)
+        return
 
     rows, best = [], {}
     for name in args.encoder:
@@ -96,22 +163,12 @@ def main():
     rows.append(chance)
 
     print(f"\nval: {len(meta_va['verb_class'])} clip, di cui {int(unseen.sum())} con combinazioni nuove")
-    print(f"{'encoder':8}{'λ':>8}{'esatto R@1/5/10':>22}{'classe R@1/5/10':>22}{'rango classe':>14}{'nuove classe R@10':>19}")
-    for r in [*best.values(), chance]:
-        print(f"{r['encoder']:8}{str(r['lambda']):>8}"
-              f"{r['esatto_R@1']:>8.2f}{r['esatto_R@5']:>7.2f}{r['esatto_R@10']:>7.2f}"
-              f"{r['classe_R@1']:>8.2f}{r['classe_R@5']:>7.2f}{r['classe_R@10']:>7.2f}"
-              f"{r['classe_rango_mediano']:>14.0f}{r['nuove_classe_R@10']:>19.2f}")
+    print_table([*best.values(), chance])
 
     winner = max(best.values(), key=lambda r: r[CRITERION])
     print(f"\nmigliore secondo {CRITERION}: {winner['encoder']} (λ={winner['lambda']:g})")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"salvato: {OUT}")
+    write_rows(OUT, rows)
 
 
 if __name__ == "__main__":
