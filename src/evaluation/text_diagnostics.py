@@ -13,7 +13,6 @@ Output: tabella a schermo e experiments/logs/text_diagnostics.csv
 """
 import argparse
 import collections
-import csv
 import sys
 from pathlib import Path
 
@@ -21,7 +20,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from utils.features import TEXT_DIR, l2_normalize, load_split  # noqa: E402
+# pylint: disable=wrong-import-position
+from utils.features import TEXT_DIR, l2_normalize, load_split, write_csv  # noqa: E402
 
 ENCODERS = ["bert", "mpnet", "clip"]
 OUT = ROOT / "experiments/logs/text_diagnostics.csv"
@@ -29,10 +29,12 @@ EXAMPLES = ["take plate", "open fridge", "cut onion"]
 
 
 def majority(rows, key):
+    """Valore piu' frequente di una colonna intera tra le righe."""
     return collections.Counter(int(r[key]) for r in rows).most_common(1)[0][0]
 
 
 def unique_sentences(encoder):
+    """Frasi uniche di train + val con vettore normalizzato, verbo e nome."""
     # una riga per frase unica di train + val: vettore normalizzato, verbo e nome
     data = np.load(TEXT_DIR / f"{encoder}.npz")
     features = data["features"]
@@ -44,13 +46,15 @@ def unique_sentences(encoder):
     texts = sorted(by_text)
 
     vectors = l2_normalize(features[[index[by_text[t][0]["narration_id"]] for t in texts]])
-    # la stessa frase ha quasi sempre le stesse classi; nei rari casi diversi vince la piu' frequente
+    # la stessa frase ha quasi sempre le stesse classi;
+    # nei rari casi diversi vince la piu' frequente
     verb = np.array([majority(by_text[t], "verb_class") for t in texts])
     noun = np.array([majority(by_text[t], "noun_class") for t in texts])
     return texts, vectors, verb, noun
 
 
 def anisotropy(vectors, n_pairs, rng):
+    """Media e deviazione standard del coseno tra coppie casuali di vettori."""
     i = rng.integers(0, len(vectors), n_pairs)
     j = rng.integers(0, len(vectors), n_pairs)
     keep = i != j
@@ -59,22 +63,27 @@ def anisotropy(vectors, n_pairs, rng):
 
 
 def nearest(vectors, k):
+    """Indici dei k vettori piu' vicini (coseno) di ogni vettore, senza se stesso."""
     sim = vectors @ vectors.T
     np.fill_diagonal(sim, -np.inf)                       # una frase non e' vicina di se' stessa
     return np.argsort(-sim, axis=1)[:, :k]               # (n, k): indici dei k piu' vicini
 
 
 def purity(neighbors, verb, noun):
+    """Quota dei vicini con stesso verbo, stesso nome e entrambi."""
     same_verb = verb[neighbors] == verb[:, None]
     same_noun = noun[neighbors] == noun[:, None]
     return same_verb.mean(), same_noun.mean(), (same_verb & same_noun).mean()
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def main():  # pylint: disable=too-many-locals
+    """Punto di ingresso: calcola diagnostiche per ogni encoder e salva il CSV."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--encoder", nargs="+", default=ENCODERS, choices=ENCODERS)
     parser.add_argument("--k", type=int, default=10, help="vicini per frase")
-    parser.add_argument("--pairs", type=int, default=10000, help="coppie casuali per l'anisotropia")
+    parser.add_argument("--pairs", type=int, default=10000,
+                        help="coppie casuali per l'anisotropia")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
@@ -91,8 +100,10 @@ def main():
         results.append({
             "encoder": name, "frasi": len(texts), "k": args.k,
             "cos_medio": round(cos_mean, 3), "cos_std": round(cos_std, 3),
-            "stesso_verbo": round(verb_p, 3), "stesso_nome": round(noun_p, 3), "entrambi": round(both_p, 3),
-            "caso_verbo": round(verb_r, 3), "caso_nome": round(noun_r, 3), "caso_entrambi": round(both_r, 3),
+            "stesso_verbo": round(verb_p, 3), "stesso_nome": round(noun_p, 3),
+            "entrambi": round(both_p, 3),
+            "caso_verbo": round(verb_r, 3), "caso_nome": round(noun_r, 3),
+            "caso_entrambi": round(both_r, 3),
         })
 
         print(f"== {name}: {len(texts)} frasi uniche")
@@ -103,16 +114,14 @@ def main():
                 print(f"   {example!r:15} -> {close}")
 
     print()
-    print(f"{'encoder':8}{'cos medio':>11}{'stesso verbo':>14}{'stesso nome':>13}{'entrambi':>10}   (caso: verbo / nome / entrambi)")
+    print(f"{'encoder':8}{'cos medio':>11}{'stesso verbo':>14}{'stesso nome':>13}{'entrambi':>10}"
+          f"   (caso: verbo / nome / entrambi)")
     for r in results:
-        print(f"{r['encoder']:8}{r['cos_medio']:>8.3f}±{r['cos_std']:<4.2f}{r['stesso_verbo']:>12.3f}"
-              f"{r['stesso_nome']:>13.3f}{r['entrambi']:>10.3f}   ({r['caso_verbo']:.3f} / {r['caso_nome']:.3f} / {r['caso_entrambi']:.3f})")
+        print(f"{r['encoder']:8}{r['cos_medio']:>8.3f}±{r['cos_std']:<4.2f}"
+              f"{r['stesso_verbo']:>12.3f}{r['stesso_nome']:>13.3f}{r['entrambi']:>10.3f}"
+              f"   ({r['caso_verbo']:.3f} / {r['caso_nome']:.3f} / {r['caso_entrambi']:.3f})")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(results[0]))
-        writer.writeheader()
-        writer.writerows(results)
+    write_csv(OUT, results)
     print(f"\nsalvato: {OUT}")
 
 

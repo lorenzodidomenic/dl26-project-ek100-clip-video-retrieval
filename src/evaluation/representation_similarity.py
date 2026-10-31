@@ -15,7 +15,6 @@ Una volta sola, come riferimento:
 Output: tabella a schermo e experiments/logs/representation_similarity.csv
 """
 import argparse
-import csv
 import sys
 from pathlib import Path
 
@@ -23,27 +22,31 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from utils.features import load_pair  # noqa: E402
+# pylint: disable=wrong-import-position
+from utils.features import load_pair, write_csv  # noqa: E402
 
 ENCODERS = ["bert", "mpnet", "clip"]
 OUT = ROOT / "experiments/logs/representation_similarity.csv"
 
 
-def linear_cka(X, Y):
-    # X (n, d1), Y (n, d2): stesse n clip, dimensioni anche diverse
-    X = X.astype(np.float64) - X.mean(0)
-    Y = Y.astype(np.float64) - Y.mean(0)
-    return np.linalg.norm(Y.T @ X) ** 2 / (np.linalg.norm(X.T @ X) * np.linalg.norm(Y.T @ Y))
+def linear_cka(x, y):
+    """CKA lineare tra x (n, d1) e y (n, d2), con le stesse n clip ma dimensioni anche diverse."""
+    x = x.astype(np.float64) - x.mean(0)
+    y = y.astype(np.float64) - y.mean(0)
+    return np.linalg.norm(y.T @ x) ** 2 / (np.linalg.norm(x.T @ x) * np.linalg.norm(y.T @ y))
 
 
 def one_hot(labels):
+    """Etichette -> matrice one-hot (n, classi)."""
     # etichette -> matrice (n, classi): una "rappresentazione" che contiene solo la classe
     _, index = np.unique(labels, return_inverse=True)
     return np.eye(index.max() + 1)[index]
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    """Punto di ingresso: calcola le CKA per ogni encoder e salva il CSV."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--encoder", nargs="+", default=ENCODERS, choices=ENCODERS)
     parser.add_argument("--split", default="val", choices=["train", "val"])
     parser.add_argument("--perms", type=int, default=5, help="mescolamenti per il controllo")
@@ -57,7 +60,10 @@ def main():
         video, text, meta = load_pair(name, args.split)
         verb, noun = one_hot(meta["verb_class"]), one_hot(meta["noun_class"])
         if video_ref is None:
-            video_ref = {"video_verbo": linear_cka(video, verb), "video_nome": linear_cka(video, noun)}
+            video_ref = {
+                "video_verbo": linear_cka(video, verb),
+                "video_nome": linear_cka(video, noun),
+            }
 
         control = [linear_cka(video, text[rng.permutation(len(text))]) for _ in range(args.perms)]
         results.append({
@@ -70,19 +76,17 @@ def main():
         })
 
     print(f"split: {args.split} ({results[0]['clip']} clip)")
-    print(f"riferimento video: CKA con verbo {video_ref['video_verbo']:.4f} | CKA con nome {video_ref['video_nome']:.4f}\n")
+    print(f"riferimento video: CKA con verbo {video_ref['video_verbo']:.4f} | "
+          f"CKA con nome {video_ref['video_nome']:.4f}\n")
     print(f"{'encoder':8}{'video-testo':>13}{'controllo':>18}{'testo-verbo':>13}{'testo-nome':>12}")
     for r in results:
-        print(f"{r['encoder']:8}{r['cka_video_testo']:>13.4f}{r['controllo_media']:>11.4f}±{r['controllo_std']:<6.4f}"
+        print(f"{r['encoder']:8}{r['cka_video_testo']:>13.4f}"
+              f"{r['controllo_media']:>11.4f}±{r['controllo_std']:<6.4f}"
               f"{r['cka_testo_verbo']:>13.4f}{r['cka_testo_nome']:>12.4f}")
 
     for r in results:
         r.update({k: round(v, 4) for k, v in video_ref.items()})
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(results[0]))
-        writer.writeheader()
-        writer.writerows(results)
+    write_csv(OUT, results)
     print(f"\nsalvato: {OUT}")
 
 

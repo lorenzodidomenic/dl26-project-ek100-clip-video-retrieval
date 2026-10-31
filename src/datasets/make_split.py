@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# pylint: disable=wrong-import-position
 from cut_clips import ROOT, SUBSET, load_rows  # noqa: E402
 
 OUT_DIR = ROOT / "data/splits"
@@ -30,6 +31,7 @@ FIELDS = [
 
 
 def pick_val_sessions(train_rows, frac, seed):
+    """Sceglie le sessioni di val: una quota per partecipante, con seed fisso."""
     # per ogni partecipante, una quota delle sue sessioni di train (almeno una)
     rng = random.Random(seed)
     sessions = collections.defaultdict(set)
@@ -44,6 +46,7 @@ def pick_val_sessions(train_rows, frac, seed):
 
 
 def report(rows):
+    """Stampa clip per partecipante e split, sessioni e combinazioni verbo/nome nuove."""
     counts = collections.Counter((r["participant_id"], r["split"]) for r in rows)
     print(f"{'':6}{'train':>8}{'val':>8}{'test':>8}")
     for p in SUBSET:
@@ -55,7 +58,9 @@ def report(rows):
     print("sessioni:", {s: len(v) for s, v in sessions.items()})
 
     # combinazioni verbo/nome assenti dal train: misurano la generalizzazione
-    combo = lambda r: (r["verb_class"], r["noun_class"])  # noqa: E731
+    def combo(r):
+        return (r["verb_class"], r["noun_class"])
+
     seen = {combo(r) for r in rows if r["split"] == "train"}
     for split in ["val", "test"]:
         part = [r for r in rows if r["split"] == split]
@@ -67,8 +72,12 @@ def report(rows):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--val-frac", type=float, default=0.15, help="quota di sessioni di train per il val")
+    """Punto di ingresso: crea split.csv e split_info.json per le clip del subset."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "--val-frac", type=float, default=0.15,
+        help="quota di sessioni di train per il val")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
@@ -83,11 +92,11 @@ def main():
         rows.append({**r, "split": "test"})
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    with open(OUT_DIR / "split.csv", "w", newline="") as f:
+    with open(OUT_DIR / "split.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
-    with open(OUT_DIR / "split_info.json", "w") as f:
+    with open(OUT_DIR / "split_info.json", "w", encoding="utf-8") as f:
         json.dump({"seed": args.seed, "val_frac": args.val_frac,
                    "val_sessions": sorted(val_sessions)}, f, indent=2)
 

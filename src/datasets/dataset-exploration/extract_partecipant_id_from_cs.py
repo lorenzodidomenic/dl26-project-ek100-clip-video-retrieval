@@ -26,7 +26,7 @@ import ast
 import os
 import sys
 
-import pandas as pd
+import pandas as pd  # pylint: disable=import-error
 
 
 # --------------------------------------------------------------------------- #
@@ -150,6 +150,7 @@ def propose_subset(stats, budget_clips):
 # --------------------------------------------------------------------------- #
 
 def main():
+    """Punto di ingresso: statistiche per partecipante e proposta di subset."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--ann-dir", required=True,

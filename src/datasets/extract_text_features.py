@@ -16,6 +16,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
+# pylint: disable=wrong-import-position
 from models.text_encoders import ENCODERS  # noqa: E402
 
 SPLIT = ROOT / "data/splits/split.csv"
@@ -23,12 +24,14 @@ OUT_DIR = ROOT / "data/features/text"
 
 
 def load_narrations():
-    with open(SPLIT, newline="") as f:
+    """Restituisce (narration_id, narration) di tutte le clip dello split."""
+    with open(SPLIT, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     return [r["narration_id"] for r in rows], [r["narration"] for r in rows]
 
 
 def encode_unique(encoder, texts, batch):
+    """Codifica le frasi uniche a blocchi e ritorna un vettore per ogni elemento di texts."""
     # codifica ogni frase unica una sola volta, a blocchi
     unique = sorted(set(texts))
     vectors = []
@@ -40,7 +43,9 @@ def encode_unique(encoder, texts, batch):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    """Punto di ingresso: codifica le narrazioni con gli encoder scelti."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--encoder", nargs="+", default=list(ENCODERS), choices=list(ENCODERS))
     parser.add_argument("--batch", type=int, default=256, help="frasi per batch")
     args = parser.parse_args()

@@ -17,17 +17,29 @@ SPLITS = ("train", "val", "test")
 
 
 def l2_normalize(x):
+    """Normalizza ogni riga di x a norma L2 unitaria."""
     return x / np.linalg.norm(x, axis=1, keepdims=True)
 
 
+def write_csv(path, rows):
+    """Scrive una lista di dict in un CSV, creando la cartella se manca."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def load_split(split):
+    """Ritorna le righe di split.csv appartenenti allo split indicato."""
     if split not in SPLITS:
         raise ValueError(f"split sconosciuto: {split}")
-    with open(SPLIT, newline="") as f:
+    with open(SPLIT, newline="", encoding="utf-8") as f:
         return [r for r in csv.DictReader(f) if r["split"] == split]
 
 
 def _rows_by_id(path, ids):
+    """Righe del file .npz nell'ordine di ids, cercate per narration_id."""
     # righe del file nell'ordine di ids, cercate per narration_id
     data = np.load(path)
     index = {nid: i for i, nid in enumerate(data["narration_id"])}

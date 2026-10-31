@@ -13,11 +13,11 @@ Per ogni text encoder:
 Sceglierlo sul val e' un po' ottimista, ma allo stesso modo per tutti gli encoder.
 La riga "caso" usa similarita' casuali: e' il valore del retrieval senza alcuna informazione.
 
-Con --split test non si sceglie nulla: per ogni encoder si usa il λ migliore sul val (dal log di val)
-e si valuta una sola volta sul test, come riferimento.
+Con --split test non si sceglie nulla: per ogni encoder si usa il λ migliore sul val
+(dal log di val) e si valuta una sola volta sul test, come riferimento.
 
-Output: tabella a schermo e experiments/logs/linear_alignment.csv (tutte le combinazioni encoder x λ),
-oppure experiments/logs/linear_alignment_test.csv con --split test.
+Output: tabella a schermo e experiments/logs/linear_alignment.csv (tutte le combinazioni
+encoder x λ), oppure experiments/logs/linear_alignment_test.csv con --split test.
 """
 import argparse
 import csv
@@ -28,8 +28,9 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
+# pylint: disable=wrong-import-position
 from evaluation.metrics import class_relevance, exact_relevance, retrieval_metrics  # noqa: E402
-from utils.features import l2_normalize, load_pair  # noqa: E402
+from utils.features import l2_normalize, load_pair, write_csv  # noqa: E402
 
 ENCODERS = ["bert", "mpnet", "clip"]
 LAMBDAS = [1, 10, 100, 1000, 10000, 100000]
@@ -39,28 +40,32 @@ OUT_TEST = ROOT / "experiments/logs/linear_alignment_test.csv"
 
 
 def standardize(train, other):
+    """Standardizza entrambe le matrici con media e deviazione del solo train."""
     # media e deviazione solo dal train, applicate anche al val
     mean, std = train.mean(0), train.std(0) + 1e-8
     return (train - mean) / std, (other - mean) / std
 
 
-def ridge(T, V, lam):
+def ridge(t, v, lam):
+    """Soluzione in forma chiusa della ridge regression da t a v."""
     # W = argmin ||T W - V||^2 + λ ||W||^2  ->  W = (T'T + λI)^-1 T'V
-    T, V = T.astype(np.float64), V.astype(np.float64)
-    return np.linalg.solve(T.T @ T + lam * np.eye(T.shape[1]), T.T @ V)
+    t, v = t.astype(np.float64), v.astype(np.float64)
+    return np.linalg.solve(t.T @ t + lam * np.eye(t.shape[1]), t.T @ v)
 
 
 def unseen_mask(meta_train, meta_val):
+    """True per le clip di val con una combinazione verbo/nome assente dal train."""
     seen = set(zip(meta_train["verb_class"], meta_train["noun_class"]))
     return np.array([c not in seen for c in zip(meta_val["verb_class"], meta_val["noun_class"])])
 
 
 def evaluate(sim, meta, unseen):
+    """Calcola le metriche esatte e di classe, su tutte le query e sulle combinazioni nuove."""
     exact = exact_relevance(len(sim))
     same_class = class_relevance(meta["verb_class"], meta["noun_class"])
     result = {}
     for tag, relevant in [("esatto", exact), ("classe", same_class)]:
-        # tutte le query, e solo quelle con combinazioni nuove (sempre cercando tra tutti i video del val)
+        # tutte le query, e solo quelle con combinazioni nuove (sempre cercando tra tutti i video)
         for k, v in retrieval_metrics(sim, relevant).items():
             result[f"{tag}_{k}"] = round(v, 2)
         for k, v in retrieval_metrics(sim[unseen], relevant[unseen]).items():
@@ -69,7 +74,9 @@ def evaluate(sim, meta, unseen):
 
 
 def print_table(rows):
-    print(f"{'encoder':8}{'λ':>8}{'esatto R@1/5/10':>22}{'classe R@1/5/10':>22}{'rango classe':>14}{'nuove classe R@10':>19}")
+    """Stampa a schermo una riga per encoder (o caso) con le metriche principali."""
+    print(f"{'encoder':8}{'λ':>8}{'esatto R@1/5/10':>22}{'classe R@1/5/10':>22}"
+          f"{'rango classe':>14}{'nuove classe R@10':>19}")
     for r in rows:
         print(f"{r['encoder']:8}{str(r['lambda']):>8}"
               f"{r['esatto_R@1']:>8.2f}{r['esatto_R@5']:>7.2f}{r['esatto_R@10']:>7.2f}"
@@ -78,17 +85,15 @@ def print_table(rows):
 
 
 def write_rows(path, rows):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
+    """Scrive le righe in un CSV e ne stampa il percorso."""
+    write_csv(path, rows)
     print(f"salvato: {path}")
 
 
 def best_val_lambdas():
+    """Ritorna il λ migliore per ogni encoder, letto dal log di val."""
     # λ migliore sul val, letto dal log di val: il test non entra nella scelta
-    with open(OUT, newline="") as f:
+    with open(OUT, newline="", encoding="utf-8") as f:
         rows = [r for r in csv.DictReader(f) if r["encoder"] in ENCODERS]
     best = {}
     for name in ENCODERS:
@@ -97,7 +102,8 @@ def best_val_lambdas():
     return best
 
 
-def run_test(encoders, seed):
+def run_test(encoders, seed):  # pylint: disable=too-many-locals
+    """Valutazione finale sul test con il λ scelto sul val."""
     lambdas = best_val_lambdas()
     rows = []
     for name in encoders:
@@ -109,28 +115,33 @@ def run_test(encoders, seed):
         target = l2_normalize(video_te)
 
         lam = lambdas[name]
-        W = ridge(text_tr, video_tr, lam)
-        sim = l2_normalize(text_te @ W) @ target.T          # (frasi test, video test)
+        w = ridge(text_tr, video_tr, lam)
+        sim = l2_normalize(text_te @ w) @ target.T          # (frasi test, video test)
         rows.append({"encoder": name, "lambda": lam, **evaluate(sim, meta_te, unseen)})
         print(f"{name:6} λ={lam:<9g} (scelto sul val) {CRITERION} = {rows[-1][CRITERION]:.2f}")
 
     # riferimento: similarita' casuali, stesse clip del test
     rng = np.random.default_rng(seed)
-    chance = {"encoder": "caso", "lambda": "", **evaluate(rng.random((len(meta_te["verb_class"]),) * 2), meta_te, unseen)}
+    n_test = len(meta_te["verb_class"])
+    chance = {"encoder": "caso", "lambda": "",
+              **evaluate(rng.random((n_test, n_test)), meta_te, unseen)}
     rows.append(chance)
 
-    print(f"\ntest: {len(meta_te['verb_class'])} clip, di cui {int(unseen.sum())} con combinazioni nuove")
+    print(f"\ntest: {n_test} clip, di cui {int(unseen.sum())} con combinazioni nuove")
     print_table(rows)
     write_rows(OUT_TEST, rows)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def main():  # pylint: disable=too-many-locals
+    """Punto di ingresso: griglia di λ su val, oppure valutazione finale su test."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--encoder", nargs="+", default=ENCODERS, choices=ENCODERS)
     parser.add_argument("--lambdas", nargs="+", type=float, default=LAMBDAS)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--split", default="val", choices=["val", "test"],
-                        help="test: usa il λ scelto sul val, una sola valutazione (ignora --lambdas)")
+    parser.add_argument(
+        "--split", default="val", choices=["val", "test"],
+        help="test: usa il λ scelto sul val, una sola valutazione (ignora --lambdas)")
     args = parser.parse_args()
 
     if args.split == "test":
@@ -147,8 +158,8 @@ def main():
         target = l2_normalize(video_va)
 
         for lam in args.lambdas:
-            W = ridge(text_tr, video_tr, lam)
-            sim = l2_normalize(text_va @ W) @ target.T          # (frasi val, video val)
+            w = ridge(text_tr, video_tr, lam)
+            sim = l2_normalize(text_va @ w) @ target.T          # (frasi val, video val)
             rows.append({"encoder": name, "lambda": lam, **evaluate(sim, meta_va, unseen)})
             print(f"{name:6} λ={lam:<9g} {CRITERION} = {rows[-1][CRITERION]:.2f}")
 
@@ -159,10 +170,12 @@ def main():
 
     # riferimento: similarita' casuali, stesse clip del val
     rng = np.random.default_rng(args.seed)
-    chance = {"encoder": "caso", "lambda": "", **evaluate(rng.random((len(meta_va["verb_class"]),) * 2), meta_va, unseen)}
+    n_val = len(meta_va["verb_class"])
+    chance = {"encoder": "caso", "lambda": "",
+              **evaluate(rng.random((n_val, n_val)), meta_va, unseen)}
     rows.append(chance)
 
-    print(f"\nval: {len(meta_va['verb_class'])} clip, di cui {int(unseen.sum())} con combinazioni nuove")
+    print(f"\nval: {n_val} clip, di cui {int(unseen.sum())} con combinazioni nuove")
     print_table([*best.values(), chance])
 
     winner = max(best.values(), key=lambda r: r[CRITERION])

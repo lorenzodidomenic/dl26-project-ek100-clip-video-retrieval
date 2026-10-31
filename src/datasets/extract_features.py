@@ -17,8 +17,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+# il filtro --session/--limit e' volutamente parallelo a cut_clips.py (stessa CLI)
+# pylint: disable=duplicate-code
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
+# pylint: disable=wrong-import-position
 from models.timesformer import TimesformerEncoder  # noqa: E402
 
 CLIPS = ROOT / "data/clips/clips"
@@ -27,6 +30,7 @@ SHORT_SIDE = 224
 
 # legge le dimensioni del video dopo il preprocess, senza caricare il videos
 def frame_size(clip_path):
+    """Restituisce (larghezza, altezza) della clip dopo lo scale del lato corto a 224."""
     # larghezza dopo lo scale che porta il lato corto a 224, come fa il processor
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -40,25 +44,29 @@ def frame_size(clip_path):
 # legge solo i frame che servono (queli del manifest)
 # ritorna un array di frame per quella clip basata sugli indici nel manifest
 def read_frames(clip_path, frame_indices):
+    """Legge dalla clip i frame agli indici indicati e li restituisce come immagini PIL."""
     w, h = frame_size(clip_path)
     cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-i", str(clip_path),
            "-vf", f"scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     raw = subprocess.run(cmd, capture_output=True, check=True).stdout
     frames = np.frombuffer(raw, np.uint8).reshape(-1, h, w, 3)
-    # gli indici del manifest sono stimati dal fps: se la clip ha qualche frame in meno, si ferma all'ultimo
+    # gli indici del manifest sono stimati dal fps:
+    # se la clip ha qualche frame in meno, si ferma all'ultimo
     idx = np.minimum(frame_indices, len(frames) - 1)
-    return [Image.fromarray(frames[i]) for i in idx]    # ritorna le immagini pil dagli indici richiesti
+    return [Image.fromarray(frames[i]) for i in idx]    # immagini pil dagli indici richiesti
 
 # carica le clip da encodare
 def load_rows():
+    """Legge tutti i manifest e tiene solo le clip per cui esiste il file mp4."""
     rows = []
     for manifest in sorted(MANIFESTS.glob("*.csv")):
-        with open(manifest, newline="") as f:
+        with open(manifest, newline="", encoding="utf-8") as f:
             rows += list(csv.DictReader(f))
     return [r for r in rows if (CLIPS / f"{r['narration_id']}.mp4").exists()]
 
 
 def group_by_session(rows):
+    """Raggruppa le righe per video_id."""
     sessions = {}
     for r in rows:
         sessions.setdefault(r["video_id"], []).append(r)
@@ -67,6 +75,7 @@ def group_by_session(rows):
 #funzione del processing
 # per ogni riga -> quindi per ogni clip -> applica l'encoding -> salva le features
 def is_complete(session_file, expected):
+    """True se il file della sessione esiste e ha una riga per ogni clip attesa."""
     # un file esistente non basta: deve avere una riga per ogni clip attesa
     if not session_file.exists():
         return False
@@ -74,6 +83,7 @@ def is_complete(session_file, expected):
 
 
 def process_session(encoder, rows, batch, out_file):
+    """Estrae le feature di una sessione a blocchi di clip e le salva in out_file."""
     features, ids = [], []
     for start in range(0, len(rows), batch):
         chunk = rows[start:start + batch]
@@ -96,6 +106,7 @@ def process_session(encoder, rows, batch, out_file):
 
 #funzione utilitaria per poter stoppare/riprendere encoding
 def merge_sessions(session_dir, final_file):
+    """Unisce i file delle singole sessioni in un unico .npz. Ritorna il numero di feature."""
     parts = [np.load(f) for f in sorted(session_dir.glob("*.npz"))]
     keys = ["features", "narration_id", "video_id", "participant_id"]
     merged = {k: np.concatenate([p[k] for p in parts]) for k in keys}
@@ -104,7 +115,9 @@ def merge_sessions(session_dir, final_file):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    """Punto di ingresso: estrae le feature delle sessioni non ancora completate."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--batch", type=int, default=8, help="clip per batch")
     parser.add_argument("--limit", type=int, help="processa solo le prime N sessioni (prova)")
     parser.add_argument("--session", help="processa solo questa sessione, es. P22_01")
