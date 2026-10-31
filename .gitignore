@@ -15,3 +15,5 @@ experiments/checkpoints/
 *.log
 
 .DS_Store
+
+wandb/

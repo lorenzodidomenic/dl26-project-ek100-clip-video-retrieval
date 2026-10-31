@@ -19,6 +19,7 @@ dependencies:
       - pyyaml
       - tensorboard
       - tqdm
-      - sentence-trasformers
+      - sentence-transformers
       - scipy
+      - wandb
       # Add other pip-only packages here
