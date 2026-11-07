@@ -1,4 +1,4 @@
-"""Training delle teste di proiezione con loss InfoNCE (Fase P3).
+"""Training delle teste di proiezione con loss InfoNCE.
 
 Per ogni epoca:
 1. mescola il train e lo divide in mini-batch;
@@ -25,7 +25,8 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-# pylint: disable=wrong-import-position
+
+
 from evaluation.linear_alignment import CRITERION, OUT as RIDGE_LOG  # noqa: E402
 from evaluation.linear_alignment import evaluate, unseen_mask  # noqa: E402
 from training.heads import DualHead  # noqa: E402
@@ -38,10 +39,10 @@ CKPT_DIR = ROOT / "experiments/checkpoints"
 
 def load_data(encoder):
     """Train e val come tensori, standardizzati con media e deviazione del solo train."""
-    video_tr, text_tr, meta_tr = load_pair(encoder, "train", normalize=False)
-    video_va, text_va, meta_va = load_pair(encoder, "val", normalize=False)
+    video_tr, text_tr, meta_tr = load_pair(encoder, "train", normalize=False)   #prendiamo tensori training (nx768) e metadati
+    video_va, text_va, meta_va = load_pair(encoder, "val", normalize=False) #prendiamo tensori validation (nx768) e metadati
     stats = {"video": (video_tr.mean(0), video_tr.std(0) + 1e-8),
-             "text": (text_tr.mean(0), text_tr.std(0) + 1e-8)}
+             "text": (text_tr.mean(0), text_tr.std(0) + 1e-8)}      #prendiamo media e dev std video training e text training
 
     def norm(x, kind):
         mean, std = stats[kind]
@@ -50,7 +51,7 @@ def load_data(encoder):
     train = (norm(video_tr, "video"), norm(text_tr, "text"))
     val = (norm(video_va, "video"), norm(text_va, "text"))
     stats = {k: tuple(torch.from_numpy(s).float() for s in v) for k, v in stats.items()}
-    return train, val, meta_va, unseen_mask(meta_tr, meta_va), stats
+    return train, val, meta_va, unseen_mask(meta_tr, meta_va), stats    # unseen mask è un array boolenao lungo quanto il val. E' True per le clip di val la cui coppia 'verbo,nome' non compare nel train
 
 
 def batches(n, size, rng):
@@ -71,7 +72,7 @@ def train_epoch(model, loss_fn, opt, data, batch, rng):
         opt.zero_grad()
         loss.backward()
         opt.step()
-        total += loss.item() * len(idx)
+        total += loss.item() * len(idx) # loss è la media sul batch. per avere la media sull'epoca bisogna pesare ogni batch per la sua dimensione
     return total / len(video)
 
 
@@ -83,14 +84,20 @@ def validate(model, loss_fn, data, batch, meta, unseen):  # pylint: disable=too-
     # loss a batch della stessa dimensione del train, sempre con la stessa permutazione:
     # in ordine di split.csv i batch conterrebbero clip della stessa sessione (negativi piu' difficili)
     rng = np.random.default_rng(0)
+    # batch da 256 come nel training con seed fisso: permutazione la stessa ogni epoca così che le variazioni della loss dipendono solo dal dal modello e non dal caso
     losses = [loss_fn(z_v[idx], z_t[idx]).item() * len(idx)
               for idx in batches(len(z_v), batch, rng)]
-    sim = (z_t @ z_v.T).cpu().numpy()                       # (frasi val, video val)
-    return sum(losses) / len(z_v), evaluate(sim, meta, unseen)
+    sim = (z_t @ z_v.T).cpu().numpy()                       # similarità tra tutti frasi e video del val
+
+    # evaluate è la funzione che ordina i video dal più simile al meno simile e calcola rango sia esatto che di classe
+    # ogni matrice calcolata due volte: su tutte le query e solo sulle query unseen
+    return sum(losses) / len(z_v), evaluate(sim, meta, unseen)  # ritorna loss media in validation e valutazione su validation set
 
 
 def ridge_reference(encoder):
-    """Riga migliore della baseline lineare sul val per questo encoder, se esiste il log."""
+    """Legge il CSV della baseline lineare (ridge regression testo→video).
+      Prende la riga migliore per lo stesso encoder, quella con il valore di classe_R@10 più alto. 
+      Serve solo a stampare alla fine un confronto: "la MLP batte la baseline lineare?". Se il file non esiste restituisce None."""
     if not RIDGE_LOG.exists():
         return None
     with open(RIDGE_LOG, newline="", encoding="utf-8") as f:

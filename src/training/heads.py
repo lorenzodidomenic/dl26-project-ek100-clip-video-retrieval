@@ -39,12 +39,3 @@ class DualHead(nn.Module):
         """Ritorna (z_v, z_t), entrambi (n, out_dim) e normalizzati."""
         return self.video(video), self.text(text)
 
-
-if __name__ == "__main__":
-    # controllo rapido delle forme e della normalizzazione, con dati casuali
-    torch.manual_seed(0)
-    heads = DualHead(video_dim=768, text_dim=768)
-    z_v, z_t = heads(torch.randn(4, 768), torch.randn(4, 768))
-    print("forme:", tuple(z_v.shape), tuple(z_t.shape))
-    print("norme:", z_v.norm(dim=1).tolist(), z_t.norm(dim=1).tolist())
-    print("parametri:", sum(p.numel() for p in heads.parameters()))

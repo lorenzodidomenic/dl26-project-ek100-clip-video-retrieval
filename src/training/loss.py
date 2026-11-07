@@ -19,9 +19,9 @@ def info_nce(z_v, z_t, tau):
     """Loss InfoNCE simmetrica su un batch di coppie (z_v[i], z_t[i]) gia' normalizzate."""
     sim = z_t @ z_v.T / tau
     target = torch.arange(len(sim), device=sim.device)
-    loss_t2v = F.cross_entropy(sim, target)         # per ogni testo, trova il suo video
-    loss_v2t = F.cross_entropy(sim.T, target)       # per ogni video, trova il suo testo
-    return 0.5 * (loss_t2v + loss_v2t)
+    loss_t2v = F.cross_entropy(sim, target)         # per ogni testo, trova il suo video (la ground trouth è nella digonale)
+    loss_v2t = F.cross_entropy(sim.T, target)       # per ogni video, trova il suo testo (la ground truth è nella diagonale)
+    return 0.5 * (loss_t2v + loss_v2t)  # media tra le due loss
 
 
 class InfoNCE(nn.Module):
@@ -36,7 +36,7 @@ class InfoNCE(nn.Module):
     @property
     def tau(self):
         """Temperatura corrente, con clamp nell'intervallo ammesso."""
-        return self.log_tau.exp().clamp(TAU_MIN, TAU_MAX)
+        return self.log_tau.exp().clamp(TAU_MIN, TAU_MAX)   # il clamp tiene la temperatura nell'intervallo di sicurezza
 
     def forward(self, z_v, z_t):
         """Loss InfoNCE simmetrica con la temperatura corrente."""
