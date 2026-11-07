@@ -132,7 +132,8 @@ def process_batch(batch, failed, ctx, args):
             continue
 
         t0 = time.time()
-        cut_clips.process_session(video_id, rows, ctx["fps"][video_id], CLIPS_OUT, args.frames)
+        cut_clips.process_session(video_id, rows, ctx["fps"][video_id], CLIPS_OUT, args.frames,
+                                  args.cut_workers)
         with open(CLIPS_OUT / "manifest" / f"{video_id}.csv", newline="", encoding="utf-8") as f:
             manifest = list(csv.DictReader(f))
         t1 = time.time()
@@ -167,6 +168,7 @@ def main():
     parser.add_argument("--workers", type=int, default=32, help="connessioni di download simultanee")
     parser.add_argument("--chunk-mb", type=int, default=128)
     parser.add_argument("--frames", type=int, default=8, help="frame per clip (come cut_clips.py)")
+    parser.add_argument("--cut-workers", type=int, default=4, help="ffmpeg in parallelo per il taglio")
     parser.add_argument("--batch", type=int, default=8, help="clip per batch del TimeSformer")
     parser.add_argument("--limit", type=int, help="elabora solo le prime N sessioni mancanti (prova)")
     parser.add_argument("--keep-videos", action="store_true", help="non cancellare i video (prova)")

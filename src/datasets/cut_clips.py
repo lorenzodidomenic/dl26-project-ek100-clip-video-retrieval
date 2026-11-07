@@ -15,6 +15,7 @@ import argparse
 import csv
 import random
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 # radice del progetto, qualunque sia la cartella di lancio
@@ -64,25 +65,25 @@ def cut_clip(src, start, stop, dst):
     subprocess.run(cmd, check=True)
 
 
-def process_session(video_id, rows, fps, out_dir, k):  # pylint: disable=too-many-locals
+def cut_clip_safe(src, start, stop, dst):
+    """Taglia in un file temporaneo e rinomina a fine taglio:
+    un'interruzione non lascia clip troncate con il nome finale."""
+    tmp = dst.parent / f"{dst.stem}.tmp.mp4"
+    cut_clip(src, start, stop, tmp)
+    tmp.replace(dst)
+
+
+def process_session(video_id, rows, fps, out_dir, k, workers=1):  # pylint: disable=too-many-locals
     """Taglia le clip di una sessione e scrive il suo manifest. Ritorna il numero di clip."""
     # lo skip e' per clip, non per sessione: una prova parziale non blocca il taglio completo
     manifest = out_dir / "manifest" / f"{video_id}.csv"
-    src = None
-    records = []
+    records, todo = [], []
     for r in rows:
         start = to_seconds(r["start_timestamp"])
         stop = to_seconds(r["stop_timestamp"])
         dst = out_dir / "clips" / f"{r['narration_id']}.mp4"
-
         if not dst.exists():
-            src = src or find_session(video_id)
-            # scrivo in un file temporaneo e rinomino a fine taglio:
-            # un'interruzione non lascia clip troncate con il nome finale
-            tmp = dst.parent / f"{dst.stem}.tmp.mp4"
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            cut_clip(src, start, stop, tmp)
-            tmp.replace(dst)
+            todo.append((start, stop, dst))
 
         n_frames = max(1, round((stop - start) * fps))
         records.append({
@@ -96,6 +97,13 @@ def process_session(video_id, rows, fps, out_dir, k):  # pylint: disable=too-man
             "frame_indices": " ".join(map(str, uniform_indices(n_frames, k))),
             "clip_path": str(dst),
         })
+
+    if todo:
+        src = find_session(video_id)
+        (out_dir / "clips").mkdir(parents=True, exist_ok=True)
+        # le clip sono indipendenti: piu' ffmpeg insieme usano meglio i core, il risultato non cambia
+        with ThreadPoolExecutor(workers) as ex:
+            list(ex.map(lambda t: cut_clip_safe(src, *t), todo))
 
     manifest.parent.mkdir(parents=True, exist_ok=True)
     with open(manifest, "w", newline="", encoding="utf-8") as f:
@@ -128,6 +136,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0, help="seme del campione di --clips")
     parser.add_argument("--limit", type=int, help="numero massimo di sessioni da processare")
     parser.add_argument("--frames", type=int, default=8, help="frame campionati per clip (8 o 16)")
+    parser.add_argument("--workers", type=int, default=4, help="ffmpeg in parallelo")
     parser.add_argument("--out", type=Path, default=DATA.parent / "clips")
     args = parser.parse_args()
 
@@ -151,7 +160,7 @@ def main():
     total = 0
     for i, video_id in enumerate(video_ids, 1):
         n = process_session(
-            video_id, sessions[video_id], fps_by_video[video_id], args.out, args.frames)
+            video_id, sessions[video_id], fps_by_video[video_id], args.out, args.frames, args.workers)
         total += n
         print(f"[{i}/{len(video_ids)}] {video_id}: {n} clip")
     print(f"fatto: {total} clip processate")
