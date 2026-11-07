@@ -104,9 +104,19 @@ def ridge_reference(encoder):
         rows = [r for r in csv.DictReader(f) if r["encoder"] == encoder]
     return max(rows, key=lambda r: float(r[CRITERION])) if rows else None
 
+#funzione utile per il nome del run (utile nella griglia degli iperparametri)
+def run_name(args):
+    """Nome della run costruito dagli iperparametri; lo usa anche grid.py per le run gia' fatte."""
+    tau = "taufix" if args.fixed_tau else "taulearn"
+    return (f"{args.encoder}_h{args.hidden}_d{args.dim}_p{args.dropout}"
+            f"_lr{args.lr:g}_b{args.batch}_{tau}_s{args.seed}")
 
-def parse_args():
-    """Iperparametri della run; i default sono quelli della roadmap."""
+
+def parse_args(argv=None):
+    """Iperparametri della run; i default sono quelli della roadmap.
+
+    argv None legge la riga di comando; una lista (es. da grid.py) viene letta al suo posto.
+    """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--encoder", default="mpnet", choices=["bert", "mpnet", "clip"])
@@ -122,11 +132,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cpu", choices=["cpu", "mps", "cuda"])
     parser.add_argument("--name", help="nome della run (default: dagli iperparametri)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.name is None:
-        tau = "taufix" if args.fixed_tau else "taulearn"
-        args.name = (f"{args.encoder}_h{args.hidden}_d{args.dim}_p{args.dropout}"
-                     f"_lr{args.lr:g}_b{args.batch}_{tau}_s{args.seed}")
+        args.name = run_name(args)
     return args
 
 
