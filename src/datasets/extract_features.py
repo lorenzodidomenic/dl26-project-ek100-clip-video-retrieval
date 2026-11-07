@@ -107,10 +107,16 @@ def process_session(encoder, rows, batch, out_file):
 #funzione utilitaria per poter stoppare/riprendere encoding
 def merge_sessions(session_dir, final_file):
     """Unisce i file delle singole sessioni in un unico .npz. Ritorna il numero di feature."""
-    parts = [np.load(f) for f in sorted(session_dir.glob("*.npz"))]
+    # i .tmp.npz sono sessioni interrotte a meta': unirli duplicherebbe delle clip
+    parts = [np.load(f) for f in sorted(session_dir.glob("*.npz")) if not f.stem.endswith(".tmp")]
     keys = ["features", "narration_id", "video_id", "participant_id"]
     merged = {k: np.concatenate([p[k] for p in parts]) for k in keys}
-    np.savez(final_file, **merged)
+    if len(set(merged["narration_id"])) != len(merged["narration_id"]):
+        raise ValueError("narration_id duplicati tra le sessioni")
+    # scrittura su file temporaneo e rinomina: chi legge il file finale non lo trova mai a meta'
+    tmp = final_file.with_name(final_file.stem + ".tmp.npz")
+    np.savez(tmp, **merged)
+    tmp.replace(final_file)
     return len(merged["narration_id"])
 
 

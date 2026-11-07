@@ -30,15 +30,21 @@ from pathlib import Path
 from epic_downloader import EpicDownloader
 
 READ = 1024 * 1024
+HERE = Path(__file__).resolve().parent  # i csv in data/ si trovano da qualunque cartella di lancio
 
 
-def collect_jobs(output_path, participants, challenges):
+def collect_jobs(output_path, participants, challenges, specific_videos='all'):
     """Fa girare EpicDownloader in modalita' 'dry run' per raccogliere (url, output_path) e la tabella md5."""
     jobs = []
-    d = EpicDownloader(base_output=output_path)
+    d = EpicDownloader(base_output=output_path,
+                       splits_path_epic_55=str(HERE / 'data/epic_55_splits.csv'),
+                       splits_path_epic_100=str(HERE / 'data/epic_100_splits.csv'),
+                       md5_path=str(HERE / 'data/md5.csv'),
+                       errata_path=str(HERE / 'data/errata.csv'))
     d.download_file = lambda url, out: jobs.append((url, out))
     d.file_already_downloaded = lambda *a: False
-    d.download(what=('videos',), participants=participants, challenges=challenges)
+    d.download(what=('videos',), participants=participants, challenges=challenges,
+               specific_videos=specific_videos)
     md5 = {}
     for url, _ in jobs:
         for base, v in ((d.base_url_100, '100'), (d.base_url_55, '55')):
@@ -148,33 +154,22 @@ def assemble(out, cdir, ranges):
     os.rmdir(cdir)
 
 
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument('--output-path', default=str(Path.home()))
-    p.add_argument('--workers', type=int, default=32, help='connessioni simultanee totali')
-    p.add_argument('--chunk-mb', type=int, default=128)
-    p.add_argument('--participants', default='all', help='es. P01,P02 (default: all)')
-    p.add_argument('--challenges', default='cmr', help='cmr = action retrieval (default)')
-    args = p.parse_args()
-
-    participants = 'all' if args.participants == 'all' else args.participants.split(',')
-    jobs, md5 = collect_jobs(args.output_path, participants, args.challenges.split(','))
-    print(f'{len(jobs)} video da controllare/scaricare', flush=True)
-
+def download_all(jobs, md5, workers=32, chunk_mb=128):
+    """Scarica (url, output_path) a pezzi in parallelo. Ritorna la lista dei problemi (vuota se tutto ok)."""
     files, tasks, skipped = {}, [], 0
     for url, out in jobs:
         total = remote_size(url)
         if os.path.exists(out) and os.path.getsize(out) == total:
             skipped += 1
             continue
-        cdir, ranges = plan_chunks(out, total, args.chunk_mb * 1024 * 1024)
+        cdir, ranges = plan_chunks(out, total, chunk_mb * 1024 * 1024)
         files[out] = {'url': url, 'cdir': cdir, 'ranges': ranges, 'left': len(ranges), 'total': total}
         tasks += [(out, i) for i in range(len(ranges))]
     have = lambda path: os.path.getsize(path) if os.path.exists(path) else 0
     todo = sum(e - s - have(os.path.join(f['cdir'], f'{i:04d}'))
                for f in files.values() for i, (s, e) in enumerate(f['ranges']))
     print(f'{skipped} gia\' completi, {len(files)} da scaricare ({todo / 1e9:.1f} GB mancanti) '
-          f'in {len(tasks)} pezzi con {args.workers} connessioni', flush=True)
+          f'in {len(tasks)} pezzi con {workers} connessioni', flush=True)
 
     lock, t0, done_bytes, failed, finished, n = threading.Lock(), time.time(), 0, [], 0, 0
 
@@ -199,7 +194,7 @@ def main():
             return out, 'video ok', new
         return out, 'pezzo ok' if ok else 'FAILED', new
 
-    with ThreadPoolExecutor(args.workers) as ex:
+    with ThreadPoolExecutor(workers) as ex:
         futures = [ex.submit(run, out, i) for out, i in tasks]
         for fut in as_completed(futures):
             out, status, size = fut.result()
@@ -216,6 +211,24 @@ def main():
                 print(f'{status:9} {os.path.basename(out):14} | video finiti {finished}/{len(files)} | '
                       f'{done_bytes / 1e9:.1f}/{todo / 1e9:.1f} GB | {rate:.2f} MB/s | ETA {eta:.1f} h', flush=True)
 
+    return failed
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument('--output-path', default=str(Path.home()))
+    p.add_argument('--workers', type=int, default=32, help='connessioni simultanee totali')
+    p.add_argument('--chunk-mb', type=int, default=128)
+    p.add_argument('--participants', default='all', help='es. P01,P02 (default: all)')
+    p.add_argument('--challenges', default='cmr', help='cmr = action retrieval (default), all = tutti i 700 video')
+    args = p.parse_args()
+
+    participants = 'all' if args.participants == 'all' else args.participants.split(',')
+    challenges = 'all' if args.challenges == 'all' else args.challenges.split(',')
+    jobs, md5 = collect_jobs(args.output_path, participants, challenges)
+    print(f'{len(jobs)} video da controllare/scaricare', flush=True)
+    t0 = time.time()
+    failed = download_all(jobs, md5, args.workers, args.chunk_mb)
     if failed:
         print('Problemi (rilancia lo script; i .badmd5 vanno cancellati prima):', *failed, sep='\n  ')
         sys.exit(1)
