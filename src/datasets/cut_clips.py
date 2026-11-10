@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ANN = ROOT / "src/datasets/epic-kitchens-100-annotations"
 DATA = ROOT / "data/EPIC-KITCHENS"
-SUBSET = ["P22", "P30", "P24", "P27","P01","P02","P03","P04","P05,"P06"]
+SUBSET = ["P22", "P30", "P24", "P27","P01","P02","P03","P04","P05","P06"]
 MANIFEST_FIELDS = [
     "narration_id", "participant_id", "video_id", "start_s", "stop_s",
     "fps", "n_frames", "frame_indices", "clip_path",

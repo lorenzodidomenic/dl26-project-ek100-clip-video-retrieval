@@ -108,8 +108,14 @@ def process_session(encoder, rows, batch, out_file):
 def merge_sessions(session_dir, final_file):
     """Unisce i file delle singole sessioni in un unico .npz. Ritorna il numero di feature."""
     # i .tmp.npz sono sessioni interrotte a meta': unirli duplicherebbe delle clip
-    parts = [np.load(f) for f in sorted(session_dir.glob("*.npz")) if not f.stem.endswith(".tmp")]
     keys = ["features", "narration_id", "video_id", "participant_id"]
+    parts = []
+    for f in sorted(session_dir.glob("*.npz")):
+        if f.stem.endswith(".tmp"):
+            continue
+        # with chiude il file subito dopo la lettura: niente file aperti accumulati
+        with np.load(f) as p:
+            parts.append({k: p[k] for k in keys})
     merged = {k: np.concatenate([p[k] for p in parts]) for k in keys}
     if len(set(merged["narration_id"])) != len(merged["narration_id"]):
         raise ValueError("narration_id duplicati tra le sessioni")
