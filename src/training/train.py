@@ -56,9 +56,9 @@ def load_data(encoder):
 
 def batches(n, size, rng):
     """Divide gli indici 0..n-1, mescolati con rng, in blocchi di al piu' size."""
-    order = torch.from_numpy(rng.permutation(n))
+    order = torch.from_numpy(rng.permutation(n))    # genera un array con gli interi 0..n-1 in ordine casuale
     for start in range(0, n, size):
-        yield order[start:start + size]
+        yield order[start:start + size] # scorre gli indici a passo di size, ad esempio batch(10,3) produce 3 batches di lunghezza 3 ed uno di 1
 
 
 def train_epoch(model, loss_fn, opt, data, batch, rng):
