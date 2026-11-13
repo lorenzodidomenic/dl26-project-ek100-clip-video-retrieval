@@ -16,4 +16,5 @@ experiments/checkpoints/
 
 .DS_Store
 
-wandb/
+wandb/# copie dei checkpoint scelti per il test: su git solo manifest.json
+experiments/final/*.pt
