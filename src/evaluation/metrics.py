@@ -23,11 +23,11 @@ def first_relevant_rank(sim, relevant):
     """Rango (da 1) del primo candidato giusto per ogni query."""
     if not relevant.any(1).all():
         raise ValueError("ogni query deve avere almeno un candidato giusto")
-    # candidati dal piu' simile al meno simile
-    order = np.argsort(-sim, axis=1)
-    # True dove, in quell'ordine, c'e' un giusto
-    hits = np.take_along_axis(relevant, order, axis=1)
-    return hits.argmax(1) + 1                               # posizione del primo giusto, da 1
+    # niente ordinamento (argsort su n x n e' lento e occupa molta memoria con val grandi):
+    # il primo giusto e' quello con la similarita' piu' alta tra i giusti, e il suo rango
+    # e' 1 + quanti candidati hanno una similarita' strettamente maggiore della sua
+    best_relevant = np.where(relevant, sim, -np.inf).max(1)
+    return (sim > best_relevant[:, None]).sum(1) + 1
 
 
 def retrieval_metrics(sim, relevant, ks=(1, 5, 10)):

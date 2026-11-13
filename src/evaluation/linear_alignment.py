@@ -90,21 +90,24 @@ def write_rows(path, rows):
     print(f"salvato: {path}")
 
 
-def best_val_lambdas():
-    """Ritorna il λ migliore per ogni encoder, letto dal log di val."""
+def best_val_lambdas(encoders):
+    """Ritorna il λ migliore per ogni encoder richiesto, letto dal log di val."""
     # λ migliore sul val, letto dal log di val: il test non entra nella scelta
     with open(OUT, newline="", encoding="utf-8") as f:
-        rows = [r for r in csv.DictReader(f) if r["encoder"] in ENCODERS]
+        rows = list(csv.DictReader(f))
     best = {}
-    for name in ENCODERS:
+    for name in encoders:   # solo gli encoder richiesti: gli altri possono mancare dal log
         candidates = [r for r in rows if r["encoder"] == name]
+        if not candidates:
+            raise SystemExit(f"{name} assente da {OUT.name}: lancia prima "
+                             f"linear_alignment.py --encoder {name} (sul val)")
         best[name] = float(max(candidates, key=lambda r: float(r[CRITERION]))["lambda"])
     return best
 
 
 def run_test(encoders, seed):  # pylint: disable=too-many-locals
     """Valutazione finale sul test con il λ scelto sul val."""
-    lambdas = best_val_lambdas()
+    lambdas = best_val_lambdas(encoders)
     rows = []
     for name in encoders:
         video_tr, text_tr, meta_tr = load_pair(name, "train")
