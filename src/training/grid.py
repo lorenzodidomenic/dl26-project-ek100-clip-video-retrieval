@@ -10,10 +10,15 @@ Si puo' interrompere (Ctrl+C) e rilanciare: riprende dalla prima run non finita.
 
 Seed sulle migliori (passo 5): --only con i nomi al seed 0 delle config scelte, --seeds 1 2.
 
+Loss multi-positivo (ablation dopo P4): --positives frase|classe rilancia le config di --only
+con quella loss. I nomi di --only restano quelli della loss classica (senza suffisso); le nuove
+run prendono il suffisso _posfrase / _posclasse, quindi le run vecchie non si toccano.
+
 Uso:
     python src/training/grid.py --dry-run                 # elenca le run, non lancia niente
     caffeinate -i python src/training/grid.py             # tutta la griglia, seed 0
     python src/training/grid.py --seeds 1 2 --only <nome_s0> <nome_s0> ...
+    python src/training/grid.py --positives classe --seeds 0 1 2 --only <nome_s0>
 """
 import argparse
 import csv
@@ -26,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 # pylint: disable=wrong-import-position
-from training.train import CKPT_DIR, CRITERION, LOG_DIR, parse_args  # noqa: E402
+from training.train import CKPT_DIR, CRITERION, LOG_DIR, POSITIVES, parse_args  # noqa: E402
 
 TRAIN = ROOT / "src/training/train.py"
 GRID = {
@@ -43,12 +48,14 @@ def configs():
     return [dict(zip(GRID, values)) for values in itertools.product(*GRID.values())]
 
 
-def to_argv(config, seed):
-    """Argomenti di train.py per una config e un seed."""
+def to_argv(config, seed, positives="diag"):
+    """Argomenti di train.py per una config, un seed e una scelta dei positivi della loss."""
     argv = ["--lr", f"{config['lr']:g}", "--dropout", str(config["dropout"]),
             "--batch", str(config["batch"]), "--dim", str(config["dim"]), "--seed", str(seed)]
     if config["fixed_tau"]:
         argv.append("--fixed-tau")
+    if positives != "diag":
+        argv += ["--positives", positives]
     return argv
 
 
@@ -67,7 +74,7 @@ def is_complete(args):
     return len(values) - 1 - best >= args.patience
 
 
-def plan(seeds, only):
+def plan(seeds, only, positives="diag"):
     """Lista di (argv, args) delle run richieste, nell'ordine della griglia."""
     grid = configs()
     if only:
@@ -78,7 +85,7 @@ def plan(seeds, only):
         grid = [by_name[n] for n in only]
     runs = []
     for config, seed in itertools.product(grid, seeds):
-        argv = to_argv(config, seed)
+        argv = to_argv(config, seed, positives)
         runs.append((argv, parse_args(argv)))
     return runs
 
@@ -89,10 +96,12 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--seeds", nargs="+", type=int, default=[0])
     parser.add_argument("--only", nargs="+", help="solo queste config (nomi delle run al seed 0)")
+    parser.add_argument("--positives", default="diag", choices=POSITIVES,
+                        help="coppie positive nella loss (default diag, la loss classica)")
     parser.add_argument("--dry-run", action="store_true", help="elenca le run senza lanciarle")
     args = parser.parse_args()
 
-    runs = plan(args.seeds, args.only)
+    runs = plan(args.seeds, args.only, args.positives)
     todo = [(argv, a) for argv, a in runs if not is_complete(a)]
     print(f"run richieste {len(runs)}: gia' finite {len(runs) - len(todo)}, da fare {len(todo)}")
     if args.dry_run:
