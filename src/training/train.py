@@ -3,6 +3,7 @@
 Per ogni epoca:
 1. mescola il train e lo divide in mini-batch;
 2. per ogni batch: forward delle due teste, loss InfoNCE, backward, passo di AdamW;
+   con --positives frase|classe la loss e' multi-positivo (vedi loss.py), default diag;
 3. sul val: loss (a batch della stessa dimensione del train) e metriche testo -> video,
    le stesse della baseline lineare (esatto, classe, combinazioni nuove);
 4. se il criterio sul val migliora salva il checkpoint, altrimenti conta le epoche senza
@@ -35,6 +36,26 @@ from utils.features import load_pair, write_csv  # noqa: E402
 
 LOG_DIR = ROOT / "experiments/logs"
 CKPT_DIR = ROOT / "experiments/checkpoints"
+# quali coppie del batch sono positive nella loss (vedi loss.py):
+# diag = solo la propria (InfoNCE classica), frase = stessa narrazione, classe = stesso verbo e nome
+POSITIVES = ("diag", "frase", "classe")
+
+
+def positive_labels(meta, positives):
+    """Un'etichetta intera per clip: due clip con la stessa etichetta sono positive tra loro.
+
+    None per diag (solo la diagonale). Le etichette servono solo a confrontare righe dello
+    stesso batch, quindi possono essere numerate in modo indipendente per train e val.
+    """
+    if positives == "diag":
+        return None
+    if positives == "frase":
+        # frase identica = stesso input all'encoder di testo = stesso embedding testuale
+        keys = meta["narration"]
+    else:
+        keys = np.stack([meta["verb_class"], meta["noun_class"]], axis=1)
+    _, labels = np.unique(keys, axis=0, return_inverse=True)
+    return torch.from_numpy(labels.reshape(-1)).long()
 
 
 def load_data(encoder):
@@ -51,7 +72,7 @@ def load_data(encoder):
     train = (norm(video_tr, "video"), norm(text_tr, "text"))
     val = (norm(video_va, "video"), norm(text_va, "text"))
     stats = {k: tuple(torch.from_numpy(s).float() for s in v) for k, v in stats.items()}
-    return train, val, meta_va, unseen_mask(meta_tr, meta_va), stats    # unseen mask è un array boolenao lungo quanto il val. E' True per le clip di val la cui coppia 'verbo,nome' non compare nel train
+    return train, val, meta_tr, meta_va, unseen_mask(meta_tr, meta_va), stats    # unseen mask è un array boolenao lungo quanto il val. E' True per le clip di val la cui coppia 'verbo,nome' non compare nel train
 
 
 def batches(n, size, rng):
@@ -61,14 +82,17 @@ def batches(n, size, rng):
         yield order[start:start + size] # scorre gli indici a passo di size, ad esempio batch(10,3) produce 3 batches di lunghezza 3 ed uno di 1
 
 
-def train_epoch(model, loss_fn, opt, data, batch, rng):
-    """Un passaggio sul train; ritorna la loss media per coppia."""
+def train_epoch(model, loss_fn, opt, data, batch, rng, labels=None):  # pylint: disable=too-many-arguments
+    """Un passaggio sul train; ritorna la loss media per coppia.
+
+    labels: etichette dei positivi per clip (None = InfoNCE classica, solo la diagonale).
+    """
     model.train()
     video, text = data
     total = 0.0
     for idx in batches(len(video), batch, rng):
         z_v, z_t = model(video[idx], text[idx])
-        loss = loss_fn(z_v, z_t)
+        loss = loss_fn(z_v, z_t, None if labels is None else labels[idx])
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -77,15 +101,19 @@ def train_epoch(model, loss_fn, opt, data, batch, rng):
 
 
 @torch.no_grad()
-def validate(model, loss_fn, data, batch, meta, unseen):  # pylint: disable=too-many-arguments
-    """Loss e metriche di retrieval sul val, con il modello in modalita' eval."""
+def validate(model, loss_fn, data, batch, meta, unseen, labels=None):  # pylint: disable=too-many-arguments
+    """Loss e metriche di retrieval sul val, con il modello in modalita' eval.
+
+    La loss di val usa gli stessi positivi del training (labels), le metriche no: sono sempre
+    le stesse (esatto, classe, nuove) per qualunque scelta dei positivi.
+    """
     model.eval()
     z_v, z_t = model(*data)
     # loss a batch della stessa dimensione del train, sempre con la stessa permutazione:
     # in ordine di split.csv i batch conterrebbero clip della stessa sessione (negativi piu' difficili)
     rng = np.random.default_rng(0)
     # batch da 256 come nel training con seed fisso: permutazione la stessa ogni epoca così che le variazioni della loss dipendono solo dal dal modello e non dal caso
-    losses = [loss_fn(z_v[idx], z_t[idx]).item() * len(idx)
+    losses = [loss_fn(z_v[idx], z_t[idx], None if labels is None else labels[idx]).item() * len(idx)
               for idx in batches(len(z_v), batch, rng)]
     sim = (z_t @ z_v.T).cpu().numpy()                       # similarità tra tutti frasi e video del val
 
@@ -108,8 +136,11 @@ def ridge_reference(encoder):
 def run_name(args):
     """Nome della run costruito dagli iperparametri; lo usa anche grid.py per le run gia' fatte."""
     tau = "taufix" if args.fixed_tau else "taulearn"
+    # diag non aggiunge niente al nome: le run fatte prima della variante multi-positivo
+    # (griglia di P4 e seed) restano riconosciute e non vengono sovrascritte
+    pos = "" if args.positives == "diag" else f"_pos{args.positives}"
     return (f"{args.encoder}_h{args.hidden}_d{args.dim}_p{args.dropout}"
-            f"_lr{args.lr:g}_b{args.batch}_{tau}_s{args.seed}")
+            f"_lr{args.lr:g}_b{args.batch}_{tau}{pos}_s{args.seed}")
 
 
 def parse_args(argv=None):
@@ -127,6 +158,8 @@ def parse_args(argv=None):
     parser.add_argument("--weight-decay", type=float, default=1e-2)
     parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--fixed-tau", action="store_true", help="tau fissa a 0.07")
+    parser.add_argument("--positives", default="diag", choices=POSITIVES,
+                        help="coppie positive nella loss: diag (classica), frase, classe")
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--seed", type=int, default=0)
@@ -145,9 +178,12 @@ def main():  # pylint: disable=too-many-locals
     rng = np.random.default_rng(args.seed)
     device = torch.device(args.device)
 
-    train, val, meta_va, unseen, stats = load_data(args.encoder)
+    train, val, meta_tr, meta_va, unseen, stats = load_data(args.encoder)
     train = tuple(x.to(device) for x in train)
     val = tuple(x.to(device) for x in val)
+    labels_tr, labels_va = (positive_labels(m, args.positives) for m in (meta_tr, meta_va))
+    if labels_tr is not None:
+        labels_tr, labels_va = labels_tr.to(device), labels_va.to(device)
 
     model = DualHead(train[0].shape[1], train[1].shape[1],
                      args.hidden, args.dim, args.dropout).to(device)
@@ -168,8 +204,8 @@ def main():  # pylint: disable=too-many-locals
     rows, best, waited = [], None, 0
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        train_loss = train_epoch(model, loss_fn, opt, train, args.batch, rng)
-        val_loss, metrics = validate(model, loss_fn, val, args.batch, meta_va, unseen)
+        train_loss = train_epoch(model, loss_fn, opt, train, args.batch, rng, labels_tr)
+        val_loss, metrics = validate(model, loss_fn, val, args.batch, meta_va, unseen, labels_va)
         rows.append({"epoca": epoch, "loss_train": round(train_loss, 4),
                      "loss_val": round(val_loss, 4), "tau": round(loss_fn.tau.item(), 4),
                      **metrics})
