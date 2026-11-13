@@ -12,7 +12,7 @@ Da seguire passo dopo passo. Ogni passo ha un obiettivo, le visualizzazioni da p
 | 1–2 | Estrazione feature (TimeSformer, MPNet, BERT, CLIP) e split | fatto | `src/datasets/`, `data/features/` |
 | 3 | Baseline zero-shot: proiezione casuale, il "pavimento" | fatto | `src/evaluation/baseline_zero_shot.py` |
 | 4 | Allineamento lineare (ridge in forma chiusa), riferimento da battere | fatto (val e test) | `src/evaluation/linear_alignment.py` |
-| 5 | Modello allenato: teste MLP + loss InfoNCE | **da fare** | `src/training/` |
+| 5 | Modello allenato: teste MLP + loss InfoNCE | **in corso** (P0–P4 fatti sul subset di 4 partecipanti; da rifare sul dataset completo) | `src/training/` |
 | 6 | Metriche riusabili, analisi e estensioni | parziale | `src/evaluation/metrics.py` |
 
 ---
@@ -190,17 +190,48 @@ Regole:
 
 **Criterio per passare:** il val migliora rispetto al ridge, o si capisce il motivo se non succede.
 
+**Esito:** run `mpnet_h1024_d256_p0.1_lr0.001_b256_taulearn_s0`, epoca migliore 4 di 14. Sul val: classe R@10 68.5 (ridge 59.6), esatto R@10 20.5 (ridge 14.5). Overfitting già dall'epoca 2: la loss di train scende, la loss val sale e τ scende da 0.07 a 0.04.
+
 ### P4 · Ricerca iperparametri (sul val)
 **Obiettivo:** scegliere la config migliore.
 
-- Griglia di 20–30 config: `lr ∈ {1e-4, 1e-3}`, `p ∈ {0.1, 0.3}`, `τ` fisso vs apprendibile, `batch ∈ {128, 256, 512}`, `d ∈ {128, 256}`.
+- **Griglia completa, 48 config** (seed 0): `lr ∈ {1e-4, 1e-3}` × `p ∈ {0.1, 0.3}` × `τ` fissa/apprendibile × `batch ∈ {128, 256, 512}` × `d ∈ {128, 256}`.
+  Completa e non a stadi: le leve interagiscono (batch × τ, batch × lr), e con 24 run per valore gli effetti principali sono medie robuste.
+- Fissi: MPNet, `H=1024`, weight decay 1e-2, max 200 epoche, patience 10.
+- La run di P3 è una delle 48 celle e viene riusata: le run nuove sono 47.
+- **Device CPU**: con un modello così piccolo MPS guadagna al massimo circa il 25%, e su MPS lo stesso seed non garantisce lo stesso risultato. Costo misurato: circa 2.5–3.5 s per epoca, quindi circa 1–2 h per la griglia.
+- **Seed sulle prime 5**: dopo la griglia, le prime 5 config si rilanciano con seed 1 e 2 (10 run). Si sceglie sulla media dei 3 seed, perché il massimo di 48 misure rumorose (±3 punti tra epoche) è ottimista.
+- **Regola di scelta**, fissata prima di vedere i risultati: vince la media più alta; se due config distano meno di una deviazione standard (la maggiore delle due), vince la più semplice (d più piccolo, poi dropout più alto, poi la media). Applicata in automatico da `p4_grid.py` quando tutti i seed sono finiti.
 - Criterio: R@10 classe sul val, come in `linear_alignment`. Non usare il test.
+- Restano fuori da P4 la loss multi-positivo e il rumore sull'input: diventano ablation sulla config scelta (vedi P8).
+
+**Implementazione** (un passo alla volta, ognuno validato prima del successivo):
+1. `train.py`: estrarre il nome della run in una funzione `run_name(args)`, condivisa con lo script della griglia.
+2. `src/training/grid.py`: genera le 48 config e lancia `train.py` in un processo separato per ciascuna. Una run conta come fatta se il suo log mostra un training finito (early stopping o ultima epoca) e il checkpoint esiste; si può interrompere e rilanciare. Opzioni `--dry-run`, `--seeds` e `--only`.
+3. Esecuzione: `caffeinate -i python src/training/grid.py`.
+4. `src/evaluation/p4_grid.py`: run e iperparametri presi dalla definizione della griglia in `grid.py` (solo le run finite), epoca migliore dal log con la regola di `train.py`; tabella e grafici. Si può lanciare anche con la griglia in corso.
+5. Seed 1 e 2 sulle prime 5, tabella con media ± deviazione standard.
+6. Chiusura: config scelta documentata qui e nel report.
+
+**Output:**
+- `experiments/logs/p4_grid.csv`: 48 run ordinate per criterio.
+- `experiments/logs/p4_seed.csv`: prime 5, media ± deviazione standard su 3 seed.
 
 **Visualizzazioni:**
-- Heatmap `lr × τ` su R@10 val.
+- Effetti principali: per ogni iperparametro, media ± deviazione standard di R@10 classe per valore, con il ridge come riferimento (`figures/p4_effetti_principali.png`).
+- Heatmap delle interazioni `batch × τ` e `lr × dropout` (`figures/p4_heatmap_*.png`).
 - Tabella config ordinate.
 
-**Criterio per passare:** una config scelta e documentata.
+**Criterio per passare:** una config scelta con la regola sopra e documentata, con la sua variabilità sui seed.
+
+**Esito (subset di 4 partecipanti, val):**
+- **Config scelta: `d=128, dropout=0.3, lr=1e-4, batch=256, τ fissa`** (con `H=1024`, weight decay 1e-2). Sui 3 seed: classe R@10 **69.31 ± 1.42**, classe R@1 32.75 ± 1.15, esatto R@10 22.43 ± 0.72, nuove classe R@10 24.70 ± 0.92; epoca migliore 44.7 ± 14.4.
+- Le prime 5 sono tutte alla pari (distanza dalla migliore < 1 dev. std, valori tra 68.08 e 69.31). La scelta ha sia la media più alta sia la forma più semplice (d più piccolo, dropout più alto), quindi la regola non è ambigua. Ha anche il risultato più stabile sulle combinazioni nuove (± 0.92 contro 1.9–6.0 delle altre).
+- Effetto dei seed: la prima al seed 0 valeva 69.98, la media sui 3 seed è 69.31 (i seed vanno da 67.7 a 70.3). La classifica al seed 0 è rumore entro circa ±1.5 punti, come previsto.
+- Effetti principali (48 run): d 256 > 128 (+1.0), τ fissa > appresa (+0.8), lr 1e-4 > 1e-3 (+0.7); dropout (+0.2) e batch (≤ 0.2) quasi ininfluenti. Tutte le 48 run battono il ridge (59.6): il minimo è 65.5.
+- Nota: sulla singola leva d=256 è meglio, ma la config scelta ha d=128. Gli effetti principali sono medie su tutte le altre leve, mentre la scelta riguarda una combinazione precisa; con il rumore osservato non c'è contraddizione.
+- Il guadagno rispetto alla config di partenza di P3 (68.5, un solo seed) è circa +0.8: con questi dati gli iperparametri contano poco rispetto al salto dal ridge (circa +9).
+- File: `experiments/logs/p4_grid.csv`, `p4_seed.csv`; figure `p4_effetti_principali.png`, `p4_heatmap_*.png`, `p4_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
 
 ### P5 · Confronto encoder di testo
 **Obiettivo:** scegliere l'encoder di testo.
@@ -238,7 +269,8 @@ Regole:
 **Criterio per passare:** analisi pronta per il report.
 
 ### P8 · Estensioni (opzionali)
-- Loss multi-positivo.
+- Loss multi-positivo. Nella run di P3, nel 59% delle righe di un batch da 256 c'è un falso negativo (stesso verbo e nome) e nel 38% la stessa frase identica. Da provare come ablation sulla config di P4: positivi = stessa frase, oppure stesso verbo e nome.
+- Rumore o dropout sulle feature di input, come augmentation (ablation sulla config di P4).
 - Fine-tuning parziale di MPNet (ultimi layer). Richiede di rieseguire l'encoder sui token.
 - Fine-tuning video: richiede GPU e clip ritagliate dai video grezzi (`data/EPIC-KITCHENS`, 193 GB). Non è necessario per l'obiettivo minimo.
 
@@ -251,6 +283,9 @@ Regole:
 | `src/training/heads.py` | teste MLP |
 | `src/training/loss.py` | InfoNCE simmetrica |
 | `src/training/train.py` | ciclo di training |
+| `src/training/grid.py` | lancio della griglia di P4 e dei seed |
+| `src/evaluation/p4_grid.py` | tabella, effetti principali, heatmap e seed di P4, con la scelta della config |
+| `*/subset4p/`, `figures/figures4p/` | archivio dello studio pilota sul subset di 4 partecipanti (split, feature testo, log, checkpoint, figure) |
 | `src/evaluation/analysis.py` | grafici e metriche per verbo, fallimenti, centroidi |
 | `experiments/configs/*.yaml` | una config per run |
 | `experiments/checkpoints/` | pesi migliori (fuori da git) |
@@ -263,9 +298,9 @@ Regole:
 
 - [x] P0 dati allineati e conteggi documentati
 - [x] P1 ridge calcolato anche sul test
-- [ ] P2 test di overfit superato
-- [ ] P3 prima run completa su MPNet
-- [ ] P4 config scelta sul val
+- [x] P2 test di overfit superato
+- [x] P3 prima run completa su MPNet
+- [x] P4 config scelta sul val (subset; da rifare sul dataset completo)
 - [ ] P5 encoder di testo scelto con 3 seed
 - [ ] P6 valutazione finale sul test, una sola volta
 - [ ] P7 analisi qualitativa e grafici
