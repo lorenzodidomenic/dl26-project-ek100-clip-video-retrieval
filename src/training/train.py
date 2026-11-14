@@ -1,7 +1,10 @@
 """Training delle teste di proiezione con loss InfoNCE.
 
+Dati: FeaturePairs (utils/dataset.py), un Dataset per split con feature gia' standardizzate,
+e un DataLoader per il train (mescolato a ogni epoca) e uno per la loss di val.
+
 Per ogni epoca:
-1. mescola il train e lo divide in mini-batch;
+1. il DataLoader del train mescola le clip e le divide in mini-batch;
 2. per ogni batch: forward delle due teste, loss InfoNCE, backward, passo di AdamW;
    con --positives frase|classe la loss e' multi-positivo (vedi loss.py), default diag;
 3. sul val: loss (a batch della stessa dimensione del train) e metriche testo -> video,
@@ -21,8 +24,8 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import torch
+from torch.utils.data import DataLoader, Subset
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -32,94 +35,76 @@ from evaluation.linear_alignment import CRITERION, OUT as RIDGE_LOG  # noqa: E40
 from evaluation.linear_alignment import evaluate, unseen_mask  # noqa: E402
 from training.heads import DualHead  # noqa: E402
 from training.loss import InfoNCE  # noqa: E402
-from utils.features import load_pair, write_csv  # noqa: E402
+# POSITIVES: quali coppie del batch sono positive nella loss (vedi loss.py e dataset.py):
+# diag = solo la propria (InfoNCE classica), frase = stessa narrazione, classe = stesso verbo e nome
+from utils.dataset import POSITIVES, FeaturePairs  # noqa: E402
+from utils.features import write_csv  # noqa: E402
 
 LOG_DIR = ROOT / "experiments/logs"
 CKPT_DIR = ROOT / "experiments/checkpoints"
-# quali coppie del batch sono positive nella loss (vedi loss.py):
-# diag = solo la propria (InfoNCE classica), frase = stessa narrazione, classe = stesso verbo e nome
-POSITIVES = ("diag", "frase", "classe")
+VAL_SEED = 0        # seed della permutazione fissa dei batch della loss di val
 
 
-def positive_labels(meta, positives):
-    """Un'etichetta intera per clip: due clip con la stessa etichetta sono positive tra loro.
+def make_data(encoder, positives, batch, seed):
+    """Dataset di train e val e i loro DataLoader.
 
-    None per diag (solo la diagonale). Le etichette servono solo a confrontare righe dello
-    stesso batch, quindi possono essere numerate in modo indipendente per train e val.
+    Train: mescolato a ogni epoca, con un generatore dedicato al seed della run.
+    Val (solo per la loss): stessi batch a ogni epoca, presi da una permutazione fissa. In ordine
+    di split.csv i batch conterrebbero clip della stessa sessione (negativi piu' difficili) e la
+    loss non sarebbe confrontabile con quella di train; fissa, le sue variazioni tra un'epoca e
+    l'altra dipendono solo dal modello e non dal caso.
     """
-    if positives == "diag":
-        return None
-    if positives == "frase":
-        # frase identica = stesso input all'encoder di testo = stesso embedding testuale
-        keys = meta["narration"]
-    else:
-        keys = np.stack([meta["verb_class"], meta["noun_class"]], axis=1)
-    _, labels = np.unique(keys, axis=0, return_inverse=True)
-    return torch.from_numpy(labels.reshape(-1)).long()
+    ds_tr = FeaturePairs(encoder, "train", positives=positives)
+    ds_va = FeaturePairs(encoder, "val", stats=ds_tr.stats, positives=positives)
+    train_loader = DataLoader(ds_tr, batch_size=batch, shuffle=True,
+                              generator=torch.Generator().manual_seed(seed))
+    perm = torch.randperm(len(ds_va), generator=torch.Generator().manual_seed(VAL_SEED))
+    val_loader = DataLoader(Subset(ds_va, perm.tolist()), batch_size=batch, shuffle=False)
+    return ds_tr, ds_va, train_loader, val_loader
 
 
-def load_data(encoder):
-    """Train e val come tensori, standardizzati con media e deviazione del solo train."""
-    video_tr, text_tr, meta_tr = load_pair(encoder, "train", normalize=False)   #prendiamo tensori training (nx768) e metadati
-    video_va, text_va, meta_va = load_pair(encoder, "val", normalize=False) #prendiamo tensori validation (nx768) e metadati
-    stats = {"video": (video_tr.mean(0), video_tr.std(0) + 1e-8),
-             "text": (text_tr.mean(0), text_tr.std(0) + 1e-8)}      #prendiamo media e dev std video training e text training
-
-    def norm(x, kind):
-        mean, std = stats[kind]
-        return torch.from_numpy((x - mean) / std).float()
-
-    train = (norm(video_tr, "video"), norm(text_tr, "text"))
-    val = (norm(video_va, "video"), norm(text_va, "text"))
-    stats = {k: tuple(torch.from_numpy(s).float() for s in v) for k, v in stats.items()}
-    return train, val, meta_tr, meta_va, unseen_mask(meta_tr, meta_va), stats    # unseen mask è un array boolenao lungo quanto il val. E' True per le clip di val la cui coppia 'verbo,nome' non compare nel train
-
-
-def batches(n, size, rng):
-    """Divide gli indici 0..n-1, mescolati con rng, in blocchi di al piu' size."""
-    order = torch.from_numpy(rng.permutation(n))    # genera un array con gli interi 0..n-1 in ordine casuale
-    for start in range(0, n, size):
-        yield order[start:start + size] # scorre gli indici a passo di size, ad esempio batch(10,3) produce 3 batches di lunghezza 3 ed uno di 1
-
-
-def train_epoch(model, loss_fn, opt, data, batch, rng, labels=None):  # pylint: disable=too-many-arguments
+def train_epoch(model, loss_fn, opt, loader, device):
     """Un passaggio sul train; ritorna la loss media per coppia.
 
-    labels: etichette dei positivi per clip (None = InfoNCE classica, solo la diagonale).
+    Ogni batch del loader e' (video, testo, etichette dei positivi), vedi utils/dataset.py.
     """
     model.train()
-    video, text = data
     total = 0.0
-    for idx in batches(len(video), batch, rng):
-        z_v, z_t = model(video[idx], text[idx])
-        loss = loss_fn(z_v, z_t, None if labels is None else labels[idx])
+    for video, text, labels in loader:
+        video, text, labels = video.to(device), text.to(device), labels.to(device)
+        z_v, z_t = model(video, text)
+        loss = loss_fn(z_v, z_t, labels)
         opt.zero_grad()
         loss.backward()
         opt.step()
-        total += loss.item() * len(idx) # loss è la media sul batch. per avere la media sull'epoca bisogna pesare ogni batch per la sua dimensione
-    return total / len(video)
+        total += loss.item() * len(video) # loss è la media sul batch. per avere la media sull'epoca bisogna pesare ogni batch per la sua dimensione
+    return total / len(loader.dataset)
 
 
 @torch.no_grad()
-def validate(model, loss_fn, data, batch, meta, unseen, labels=None):  # pylint: disable=too-many-arguments
+def validate(model, loss_fn, loader, dataset, unseen, device):  # pylint: disable=too-many-arguments
     """Loss e metriche di retrieval sul val, con il modello in modalita' eval.
 
-    La loss di val usa gli stessi positivi del training (labels), le metriche no: sono sempre
+    loader: batch della loss, della stessa dimensione del train e sempre uguali (make_data).
+    dataset: il val intero, per le metriche.
+    La loss di val usa gli stessi positivi del training, le metriche no: sono sempre
     le stesse (esatto, classe, nuove) per qualunque scelta dei positivi.
     """
     model.eval()
-    z_v, z_t = model(*data)
-    # loss a batch della stessa dimensione del train, sempre con la stessa permutazione:
-    # in ordine di split.csv i batch conterrebbero clip della stessa sessione (negativi piu' difficili)
-    rng = np.random.default_rng(0)
-    # batch da 256 come nel training con seed fisso: permutazione la stessa ogni epoca così che le variazioni della loss dipendono solo dal dal modello e non dal caso
-    losses = [loss_fn(z_v[idx], z_t[idx], None if labels is None else labels[idx]).item() * len(idx)
-              for idx in batches(len(z_v), batch, rng)]
+    total = 0.0
+    for video, text, labels in loader:
+        video, text, labels = video.to(device), text.to(device), labels.to(device)
+        z_v, z_t = model(video, text)
+        total += loss_fn(z_v, z_t, labels).item() * len(video)
+
+    # metriche: ogni frase cerca tra TUTTI i video del val, quindi un solo passaggio sull'intero
+    # split (a batch ogni frase vedrebbe solo i video del suo batch)
+    z_v, z_t = model(dataset.video.to(device), dataset.text.to(device))
     sim = (z_t @ z_v.T).cpu().numpy()                       # similarità tra tutti frasi e video del val
 
     # evaluate è la funzione che ordina i video dal più simile al meno simile e calcola rango sia esatto che di classe
     # ogni matrice calcolata due volte: su tutte le query e solo sulle query unseen
-    return sum(losses) / len(z_v), evaluate(sim, meta, unseen)  # ritorna loss media in validation e valutazione su validation set
+    return total / len(loader.dataset), evaluate(sim, dataset.meta, unseen)  # ritorna loss media in validation e valutazione su validation set
 
 
 def ridge_reference(encoder):
@@ -174,18 +159,15 @@ def parse_args(argv=None):
 def main():  # pylint: disable=too-many-locals
     """Training con early stopping sul criterio di val; salva log e checkpoint migliore."""
     args = parse_args()
-    torch.manual_seed(args.seed)
-    rng = np.random.default_rng(args.seed)
+    torch.manual_seed(args.seed)                            # inizializzazione dei pesi e dropout
     device = torch.device(args.device)
 
-    train, val, meta_tr, meta_va, unseen, stats = load_data(args.encoder)
-    train = tuple(x.to(device) for x in train)
-    val = tuple(x.to(device) for x in val)
-    labels_tr, labels_va = (positive_labels(m, args.positives) for m in (meta_tr, meta_va))
-    if labels_tr is not None:
-        labels_tr, labels_va = labels_tr.to(device), labels_va.to(device)
+    ds_tr, ds_va, train_loader, val_loader = make_data(
+        args.encoder, args.positives, args.batch, args.seed)
+    # True per le clip di val la cui coppia (verbo, nome) non compare nel train
+    unseen = unseen_mask(ds_tr.meta, ds_va.meta)
 
-    model = DualHead(train[0].shape[1], train[1].shape[1],
+    model = DualHead(ds_tr.video.shape[1], ds_tr.text.shape[1],
                      args.hidden, args.dim, args.dropout).to(device)
     loss_fn = InfoNCE(learnable_tau=not args.fixed_tau).to(device)
     # niente weight decay su tau: la spingerebbe verso 1 (log tau verso 0) senza motivo
@@ -197,15 +179,15 @@ def main():  # pylint: disable=too-many-locals
     log_path = LOG_DIR / f"train_{args.name}.csv"
     ckpt_path = CKPT_DIR / f"{args.name}.pt"
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"run {args.name}: train {len(train[0])}, val {len(val[0])}, device {device}")
+    print(f"run {args.name}: train {len(ds_tr)}, val {len(ds_va)}, device {device}")
     print(f"{'epoca':>5}{'loss tr':>9}{'loss val':>10}{'tau':>7}"
           f"{'esatto R@10':>13}{'classe R@10':>13}{'s':>6}")
 
     rows, best, waited = [], None, 0
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        train_loss = train_epoch(model, loss_fn, opt, train, args.batch, rng, labels_tr)
-        val_loss, metrics = validate(model, loss_fn, val, args.batch, meta_va, unseen, labels_va)
+        train_loss = train_epoch(model, loss_fn, opt, train_loader, device)
+        val_loss, metrics = validate(model, loss_fn, val_loader, ds_va, unseen, device)
         rows.append({"epoca": epoch, "loss_train": round(train_loss, 4),
                      "loss_val": round(val_loss, 4), "tau": round(loss_fn.tau.item(), 4),
                      **metrics})
@@ -219,7 +201,7 @@ def main():  # pylint: disable=too-many-locals
         if improved:
             best, waited = rows[-1], 0
             torch.save({"model": model.state_dict(), "loss": loss_fn.state_dict(),
-                        "stats": stats, "args": vars(args), "epoch": epoch,
+                        "stats": ds_tr.stats, "args": vars(args), "epoch": epoch,
                         "metrics": metrics}, ckpt_path)
         else:
             waited += 1

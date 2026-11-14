@@ -16,5 +16,13 @@ experiments/checkpoints/
 
 .DS_Store
 
-wandb/# copie dei checkpoint scelti per il test: su git solo manifest.json
+wandb/
+
+# copie dei checkpoint scelti per il test: su git solo manifest.json
 experiments/final/*.pt
+
+# run della pipeline precedente al refactor Dataset/DataLoader: su git solo i risultati finali
+experiments/archivio_v1/logs/
+experiments/archivio_v1/checkpoints/
+experiments/archivio_v1/final/*.pt
+

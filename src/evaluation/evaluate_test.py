@@ -44,6 +44,8 @@ from evaluation.linear_alignment import (  # noqa: E402
     OUT as RIDGE_LOG, best_val_lambdas, ridge, standardize, unseen_mask)
 from evaluation.metrics import class_relevance, exact_relevance, first_relevant_rank  # noqa: E402
 from training.heads import DualHead  # noqa: E402
+# standardize di linear_alignment (numpy, per il ridge) e' un'altra funzione: alias distinto
+from utils.dataset import standardize as standardize_with_stats  # noqa: E402
 from utils.features import l2_normalize, load_pair, write_csv  # noqa: E402
 
 FINAL = ROOT / "experiments/final"
@@ -146,9 +148,10 @@ def mlp_sim(model_info, video, text):
     model = DualHead(video.shape[1], text.shape[1], args["hidden"], args["dim"], args["dropout"])
     model.load_state_dict(ckpt["model"])
     model.eval()                                            # niente dropout
-    # standardizzazione con media e dev. del train (std contiene gia' il +1e-8 di train.py)
-    v = (torch.from_numpy(video).float() - stats["video"][0]) / stats["video"][1]
-    t = (torch.from_numpy(text).float() - stats["text"][0]) / stats["text"][1]
+    # standardizzazione con media e dev. del train salvate nel checkpoint
+    # (std contiene gia' il +EPS di utils/dataset.py), stessa formula del training
+    v = standardize_with_stats(torch.from_numpy(video).float(), stats["video"])
+    t = standardize_with_stats(torch.from_numpy(text).float(), stats["text"])
     z_v, z_t = model(v, t)                                  # gia' normalizzati L2 dalle teste
     return (z_t @ z_v.T).numpy()
 
