@@ -113,8 +113,10 @@ def parse_args(argv=None):
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--accelerator", default="auto", choices=["auto", "cpu", "mps", "cuda"],
-                        help="device di pl.Trainer (auto: GPU/MPS se c'e', altrimenti CPU)")
+    # CPU di default (roadmap P4): con un modello cosi' piccolo MPS guadagna poco, e su MPS
+    # lo stesso seed non garantisce lo stesso risultato
+    parser.add_argument("--accelerator", default="cpu", choices=["auto", "cpu", "mps", "cuda"],
+                        help="device di pl.Trainer (default cpu; auto: GPU/MPS se c'e')")
     parser.add_argument("--name", help="nome della run (default: dagli iperparametri)")
     parser.add_argument("--group",
                         help="gruppo della run su wandb (es. griglia, seed, loss, finale)")
