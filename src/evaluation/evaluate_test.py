@@ -43,7 +43,7 @@ from evaluation.baseline_zero_shot import (  # noqa: E402
 from evaluation.linear_alignment import (  # noqa: E402
     OUT as RIDGE_LOG, best_val_lambdas, ridge, standardize, unseen_mask)
 from evaluation.metrics import class_relevance, exact_relevance, first_relevant_rank  # noqa: E402
-from training.heads import DualHead  # noqa: E402
+from training.task import RetrievalTask  # noqa: E402
 # standardize di linear_alignment (numpy, per il ridge) e' un'altra funzione: alias distinto
 from utils.dataset import standardize as standardize_with_stats  # noqa: E402
 from utils.features import l2_normalize, load_pair, write_csv  # noqa: E402
@@ -142,17 +142,18 @@ def ridge_sim(split, lam):
 
 @torch.no_grad()
 def mlp_sim(model_info, video, text):
-    """Similarita' coseno di un checkpoint MLP, con le statistiche del train salvate dentro."""
-    ckpt = torch.load(FINAL / model_info["file"], map_location="cpu", weights_only=False)
-    args, stats = ckpt["args"], ckpt["stats"]
-    model = DualHead(video.shape[1], text.shape[1], args["hidden"], args["dim"], args["dropout"])
-    model.load_state_dict(ckpt["model"])
-    model.eval()                                            # niente dropout
+    """Similarita' coseno di un checkpoint MLP (.ckpt di Lightning), con le statistiche del train.
+
+    load_from_checkpoint ricostruisce RetrievalTask dagli iperparametri salvati e carica pesi e
+    buffer: tra questi media e deviazione del train usate in training.
+    """
+    task = RetrievalTask.load_from_checkpoint(FINAL / model_info["file"], map_location="cpu")
+    task.eval()                                             # niente dropout
     # standardizzazione con media e dev. del train salvate nel checkpoint
     # (std contiene gia' il +EPS di utils/dataset.py), stessa formula del training
-    v = standardize_with_stats(torch.from_numpy(video).float(), stats["video"])
-    t = standardize_with_stats(torch.from_numpy(text).float(), stats["text"])
-    z_v, z_t = model(v, t)                                  # gia' normalizzati L2 dalle teste
+    v = standardize_with_stats(torch.from_numpy(video).float(), task.stats("video"))
+    t = standardize_with_stats(torch.from_numpy(text).float(), task.stats("text"))
+    z_v, z_t = task(v, t)                                   # gia' normalizzati L2 dalle teste
     return (z_t @ z_v.T).numpy()
 
 

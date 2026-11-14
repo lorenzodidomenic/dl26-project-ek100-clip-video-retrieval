@@ -1,7 +1,7 @@
 """Griglia di iperparametri della Fase P4: lancia train.py una volta per configurazione.
 
 Griglia completa, 48 config: lr x dropout x tau x batch x d. Gli altri iperparametri restano
-ai default di train.py (MPNet, H=1024, weight decay 1e-2, patience 10, CPU).
+ai default di train.py (MPNet, H=1024, weight decay 1e-2, patience 10, accelerator auto).
 
 Ogni run gira in un processo separato, cosi' parte sempre da zero (seed, memoria).
 Una run e' fatta se il suo log mostra un training finito (early stopping o ultima epoca)
@@ -14,9 +14,12 @@ Loss multi-positivo (ablation dopo P4): --positives frase|classe rilancia le con
 con quella loss. I nomi di --only restano quelli della loss classica (senza suffisso); le nuove
 run prendono il suffisso _posfrase / _posclasse, quindi le run vecchie non si toccano.
 
+wandb: --group raggruppa le run nella dashboard (es. griglia, seed, loss), --wandb-mode
+viene passato a train.py. Non cambiano il nome delle run, quindi nemmeno quali sono gia' fatte.
+
 Uso:
     python src/training/grid.py --dry-run                 # elenca le run, non lancia niente
-    caffeinate -i python src/training/grid.py             # tutta la griglia, seed 0
+    caffeinate -i python src/training/grid.py --group griglia   # tutta la griglia, seed 0
     python src/training/grid.py --seeds 1 2 --only <nome_s0> <nome_s0> ...
     python src/training/grid.py --positives classe --seeds 0 1 2 --only <nome_s0>
 """
@@ -61,7 +64,7 @@ def to_argv(config, seed, positives="diag"):
 
 def is_complete(args):
     """True se la run ha finito il training: early stopping raggiunto o ultima epoca."""
-    log, ckpt = LOG_DIR / f"train_{args.name}.csv", CKPT_DIR / f"{args.name}.pt"
+    log, ckpt = LOG_DIR / f"train_{args.name}.csv", CKPT_DIR / f"{args.name}.ckpt"
     if not (log.exists() and ckpt.exists()):
         return False
     with open(log, newline="", encoding="utf-8") as f:
@@ -98,8 +101,12 @@ def main():
     parser.add_argument("--only", nargs="+", help="solo queste config (nomi delle run al seed 0)")
     parser.add_argument("--positives", default="diag", choices=POSITIVES,
                         help="coppie positive nella loss (default diag, la loss classica)")
+    parser.add_argument("--group", help="gruppo delle run su wandb (es. griglia, seed, loss)")
+    parser.add_argument("--wandb-mode", default="online", choices=["online", "offline", "disabled"])
     parser.add_argument("--dry-run", action="store_true", help="elenca le run senza lanciarle")
     args = parser.parse_args()
+    # opzioni solo di logging: si aggiungono al lancio, non entrano nel nome della run
+    extra = ["--wandb-mode", args.wandb_mode] + (["--group", args.group] if args.group else [])
 
     runs = plan(args.seeds, args.only, args.positives)
     todo = [(argv, a) for argv, a in runs if not is_complete(a)]
@@ -114,7 +121,8 @@ def main():
         for i, (argv, a) in enumerate(todo, 1):
             print(f"\n=== [{i}/{len(todo)}] {a.name}  ({(time.time() - start) / 60:.1f} min) ===",
                   flush=True)
-            if subprocess.run([sys.executable, str(TRAIN), *argv], check=False).returncode != 0:
+            cmd = [sys.executable, str(TRAIN), *argv, *extra]
+            if subprocess.run(cmd, check=False).returncode != 0:
                 failed.append(a.name)
     except KeyboardInterrupt:
         print("\ninterrotto: rilancia lo stesso comando per riprendere dalla run non finita")

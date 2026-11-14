@@ -22,4 +22,5 @@ dependencies:
       - sentence-transformers
       - scipy
       - wandb
+      - pytorch-lightning
       # Add other pip-only packages here
