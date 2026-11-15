@@ -145,8 +145,8 @@ def ridge_sim(split, lam):
 
 
 @torch.no_grad()
-def mlp_sim(model_info, video, text):
-    """Similarita' coseno di un checkpoint MLP (.ckpt di Lightning), con le statistiche del train.
+def mlp_embed(model_info, video, text):
+    """Embedding (z_v, z_t) di un checkpoint MLP (.ckpt di Lightning), normalizzati L2.
 
     load_from_checkpoint ricostruisce RetrievalTask dagli iperparametri salvati e carica pesi e
     buffer: tra questi media e deviazione del train usate in training.
@@ -158,7 +158,14 @@ def mlp_sim(model_info, video, text):
     v = standardize_with_stats(torch.from_numpy(video).float(), task.stats("video"))
     t = standardize_with_stats(torch.from_numpy(text).float(), task.stats("text"))
     z_v, z_t = task(v, t)                                   # gia' normalizzati L2 dalle teste
-    return (z_t @ z_v.T).numpy()
+    return z_v.numpy(), z_t.numpy()
+
+
+def mlp_sim(model_info, video, text):
+    """Similarita' coseno frasi x video di un checkpoint MLP, con le statistiche del train."""
+    z_v, z_t = mlp_embed(model_info, video, text)
+    # prodotto in torch come prima del refactor: stessi numeri bit per bit di final_test.csv
+    return (torch.from_numpy(z_t) @ torch.from_numpy(z_v).T).numpy()
 
 
 def aggregate(rows, model):
