@@ -1,0 +1,225 @@
+{
+  "descrizione": "Checkpoint scelti sul val da valutare sul test (P6), una sola volta. Copie degli originali in experiments/checkpoints/ (verificate con sha256).",
+  "data": "2026-11-15",
+  "commit": "bca592a",
+  "scelta": {
+    "criterio": "classe_R@10 sul val, media su 3 seed (0, 1, 2)",
+    "regola": "vince la media piu' alta; alla pari (distanza < 1 dev. std, la maggiore delle due) vince la piu' semplice: d piu' piccolo, dropout piu' alto, tau fissa prima di appresa, batch piu' piccolo",
+    "P4": "griglia 48 config con loss diag, seed sulle prime 5 -> d128 p0.3 lr1e-4 b256 tau fissa (72.17 +- 0.56)",
+    "ablation_loss": "stessa config, positives diag/frase/classe x 3 seed: classe migliore (75.51 +- 0.62 vs diag 72.17 +- 0.56); frase equivalente a diag (72.07 +- 0.59)",
+    "mini_griglia": "positives classe, batch {128,256,512} x tau {fissa, appresa}: b256 tau fissa media piu' alta (75.51 +- 0.62); alla pari b256 tau appresa (75.03 +- 1.16), b512 tau appresa (75.07 +- 0.79), b512 tau fissa (74.83 +- 0.97); b128 non alla pari (73.96 +- 1.45, 73.63 +- 0.86) -> b256 tau fissa, anche la piu' semplice tra quelle alla pari"
+  },
+  "riferimento_ridge_val": {
+    "encoder": "mpnet",
+    "lambda": 1000.0,
+    "esatto_R@10": 6.09,
+    "classe_R@10": 52.89,
+    "nuove_classe_R@10": 8.27
+  },
+  "modelli": [
+    {
+      "file": "classe_s0.ckpt",
+      "ruolo": "finale",
+      "positives": "classe",
+      "seed": 0,
+      "run": "mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_posclasse_s0",
+      "sorgente": "experiments/checkpoints/mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_posclasse_s0.ckpt",
+      "sha256": "fde6ef777d4e3ae99271c7d8d5432470443d2a39d18e82a2577de79afe56b9ae",
+      "config": {
+        "encoder": "mpnet",
+        "hidden": 1024,
+        "dim": 128,
+        "dropout": 0.3,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch": 256,
+        "fixed_tau": true,
+        "patience": 10
+      },
+      "epoca_migliore": 47,
+      "epoche_totali": 57,
+      "val": {
+        "classe_R@1": 42.67,
+        "classe_R@5": 65.95,
+        "classe_R@10": 74.86,
+        "classe_rango_mediano": 2.0,
+        "esatto_R@1": 2.48,
+        "esatto_R@5": 8.61,
+        "esatto_R@10": 13.84,
+        "esatto_rango_mediano": 185.0,
+        "nuove_classe_R@10": 16.29,
+        "nuove_esatto_R@10": 10.53
+      }
+    },
+    {
+      "file": "classe_s1.ckpt",
+      "ruolo": "finale",
+      "positives": "classe",
+      "seed": 1,
+      "run": "mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_posclasse_s1",
+      "sorgente": "experiments/checkpoints/mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_posclasse_s1.ckpt",
+      "sha256": "c341d4910159f9efc1765035dff410536664e523dec4912d418930a1b76d5925",
+      "config": {
+        "encoder": "mpnet",
+        "hidden": 1024,
+        "dim": 128,
+        "dropout": 0.3,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch": 256,
+        "fixed_tau": true,
+        "patience": 10
+      },
+      "epoca_migliore": 73,
+      "epoche_totali": 83,
+      "val": {
+        "classe_R@1": 42.58,
+        "classe_R@5": 66.26,
+        "classe_R@10": 76.09,
+        "classe_rango_mediano": 2.0,
+        "esatto_R@1": 2.55,
+        "esatto_R@5": 8.68,
+        "esatto_R@10": 13.74,
+        "esatto_rango_mediano": 192.0,
+        "nuove_classe_R@10": 17.79,
+        "nuove_esatto_R@10": 10.03
+      }
+    },
+    {
+      "file": "classe_s2.ckpt",
+      "ruolo": "finale",
+      "positives": "classe",
+      "seed": 2,
+      "run": "mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_posclasse_s2",
+      "sorgente": "experiments/checkpoints/mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_posclasse_s2.ckpt",
+      "sha256": "9a125b9827a55bc3a50138a8c7648720e1c925b4fbd9049e1e726c567db04995",
+      "config": {
+        "encoder": "mpnet",
+        "hidden": 1024,
+        "dim": 128,
+        "dropout": 0.3,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch": 256,
+        "fixed_tau": true,
+        "patience": 10
+      },
+      "epoca_migliore": 44,
+      "epoche_totali": 54,
+      "val": {
+        "classe_R@1": 41.01,
+        "classe_R@5": 67.36,
+        "classe_R@10": 75.58,
+        "classe_rango_mediano": 2.0,
+        "esatto_R@1": 2.65,
+        "esatto_R@5": 8.74,
+        "esatto_R@10": 13.82,
+        "esatto_rango_mediano": 186.0,
+        "nuove_classe_R@10": 18.3,
+        "nuove_esatto_R@10": 9.77
+      }
+    },
+    {
+      "file": "diag_s0.ckpt",
+      "ruolo": "confronto",
+      "positives": "diag",
+      "seed": 0,
+      "run": "mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_s0",
+      "sorgente": "experiments/checkpoints/mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_s0.ckpt",
+      "sha256": "22b80a19861a1340516c1a8fe154e19f84a33549da319124fd0c5d4c04812111",
+      "config": {
+        "encoder": "mpnet",
+        "hidden": 1024,
+        "dim": 128,
+        "dropout": 0.3,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch": 256,
+        "fixed_tau": true,
+        "patience": 10
+      },
+      "epoca_migliore": 27,
+      "epoche_totali": 37,
+      "val": {
+        "classe_R@1": 35.51,
+        "classe_R@5": 61.94,
+        "classe_R@10": 71.52,
+        "classe_rango_mediano": 3.0,
+        "esatto_R@1": 3.01,
+        "esatto_R@5": 10.05,
+        "esatto_R@10": 15.65,
+        "esatto_rango_mediano": 146.0,
+        "nuove_classe_R@10": 16.29,
+        "nuove_esatto_R@10": 11.53
+      }
+    },
+    {
+      "file": "diag_s1.ckpt",
+      "ruolo": "confronto",
+      "positives": "diag",
+      "seed": 1,
+      "run": "mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_s1",
+      "sorgente": "experiments/checkpoints/mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_s1.ckpt",
+      "sha256": "e7dc4a31e62e340f41ec0bab678f9058ed6021825f52ff29c5c7fd962b41f5d4",
+      "config": {
+        "encoder": "mpnet",
+        "hidden": 1024,
+        "dim": 128,
+        "dropout": 0.3,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch": 256,
+        "fixed_tau": true,
+        "patience": 10
+      },
+      "epoca_migliore": 51,
+      "epoche_totali": 61,
+      "val": {
+        "classe_R@1": 38.26,
+        "classe_R@5": 63.06,
+        "classe_R@10": 72.52,
+        "classe_rango_mediano": 2.0,
+        "esatto_R@1": 3.16,
+        "esatto_R@5": 10.44,
+        "esatto_R@10": 16.06,
+        "esatto_rango_mediano": 143.0,
+        "nuove_classe_R@10": 16.29,
+        "nuove_esatto_R@10": 11.28
+      }
+    },
+    {
+      "file": "diag_s2.ckpt",
+      "ruolo": "confronto",
+      "positives": "diag",
+      "seed": 2,
+      "run": "mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_s2",
+      "sorgente": "experiments/checkpoints/mpnet_h1024_d128_p0.3_lr0.0001_b256_taufix_s2.ckpt",
+      "sha256": "a598c5ec8d9507aaac5e7eee43887fa0574a7d57f2222966552862645b4d8093",
+      "config": {
+        "encoder": "mpnet",
+        "hidden": 1024,
+        "dim": 128,
+        "dropout": 0.3,
+        "lr": 0.0001,
+        "weight_decay": 0.01,
+        "batch": 256,
+        "fixed_tau": true,
+        "patience": 10
+      },
+      "epoca_migliore": 36,
+      "epoche_totali": 46,
+      "val": {
+        "classe_R@1": 35.46,
+        "classe_R@5": 62.85,
+        "classe_R@10": 72.46,
+        "classe_rango_mediano": 3.0,
+        "esatto_R@1": 3.11,
+        "esatto_R@5": 10.18,
+        "esatto_R@10": 15.97,
+        "esatto_rango_mediano": 143.0,
+        "nuove_classe_R@10": 19.55,
+        "nuove_esatto_R@10": 12.03
+      }
+    }
+  ]
+}

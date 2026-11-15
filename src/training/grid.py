@@ -1,7 +1,7 @@
 """Griglia di iperparametri della Fase P4: lancia train.py una volta per configurazione.
 
 Griglia completa, 48 config: lr x dropout x tau x batch x d. Gli altri iperparametri restano
-ai default di train.py (MPNet, H=1024, weight decay 1e-2, patience 10, accelerator auto).
+ai default di train.py (MPNet, H=1024, weight decay 1e-2, patience 10, CPU).
 
 Ogni run gira in un processo separato, cosi' parte sempre da zero (seed, memoria).
 Una run e' fatta se il suo log mostra un training finito (early stopping o ultima epoca)

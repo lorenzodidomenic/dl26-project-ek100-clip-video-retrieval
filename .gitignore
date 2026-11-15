@@ -27,3 +27,4 @@ experiments/archivio_v1/logs/
 experiments/archivio_v1/checkpoints/
 experiments/archivio_v1/final/*.pt
 
+experiments/final/*.ckpt
