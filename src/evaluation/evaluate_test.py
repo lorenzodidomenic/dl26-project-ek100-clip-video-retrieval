@@ -24,6 +24,9 @@ Output:
 - test: experiments/final/final_test.csv e experiments/final/final_test_ranks.npz
   (ranghi per query di ogni modello e maschere zero-shot, per figure e analisi qualitativa).
   Se final_test.csv esiste gia' lo script si ferma: il test si valuta una volta sola.
+  In piu' una run wandb "test-finale" (gruppo "test", job_type "eval") nello stesso progetto
+  del training: la tabella di final_test.csv e, nel summary, le metriche principali di ogni
+  modello (media sui seed). Fonte ufficiale resta il CSV su git; --wandb-mode disabled la salta.
 """
 import argparse
 import csv
@@ -44,6 +47,7 @@ from evaluation.linear_alignment import (  # noqa: E402
     OUT as RIDGE_LOG, best_val_lambdas, ridge, standardize, unseen_mask)
 from evaluation.metrics import class_relevance, exact_relevance, first_relevant_rank  # noqa: E402
 from training.task import RetrievalTask  # noqa: E402
+from training.train import WANDB_DIR, WANDB_PROJECT  # noqa: E402
 # standardize di linear_alignment (numpy, per il ridge) e' un'altra funzione: alias distinto
 from utils.dataset import standardize as standardize_with_stats  # noqa: E402
 from utils.features import l2_normalize, load_pair, write_csv  # noqa: E402
@@ -253,6 +257,31 @@ def print_summary(rows):
         print(f"{r['modello']:12}" + "".join(f"{c:>25}" for c in cells))
 
 
+def log_to_wandb(rows, models, mode):
+    """Run wandb di valutazione: tabella completa e metriche principali nel summary.
+
+    Nel summary una voce per modello: caso e ridge (una sola run), baseline e MLP con la media
+    sui seed (es. "mlp_classe/classe_R@10"); le dev. std e i singoli seed sono nella tabella.
+    """
+    import wandb  # pylint: disable=import-outside-toplevel
+
+    run = wandb.init(project=WANDB_PROJECT, name="test-finale", group="test", job_type="eval",
+                     dir=str(WANDB_DIR), mode=mode,
+                     config={"encoder": ENCODER,
+                             "checkpoint": {m["file"]: m["run"] for m in models}})
+    columns = list(rows[0])
+    # seed misto (numeri, "media", "std"): come testo, wandb.Table vuole un tipo per colonna
+    data = [[str(r[c]) if c in ("seed", "dettagli") else r[c] for c in columns] for r in rows]
+    run.log({"final_test": wandb.Table(columns=columns, data=data)})
+    main_metrics = ("esatto_R@1", "esatto_R@5", "esatto_R@10", "esatto_rango_mediano",
+                    "classe_R@10", "nuove_classe_R@10")
+    for r in rows:
+        if r["modello"] in ("caso", "ridge") or r["seed"] == "media":
+            for k in main_metrics:
+                run.summary[f"{r['modello']}/{k}"] = r[k]
+    run.finish()
+
+
 def main():
     """Valuta tutti i modelli sullo split scelto e salva i risultati."""
     parser = argparse.ArgumentParser(
@@ -261,6 +290,8 @@ def main():
     parser.add_argument("--overwrite", action="store_true",
                         help="riscrive final_test.csv se esiste (solo per rigenerare lo stesso "
                              "risultato, mai dopo aver cambiato qualcosa)")
+    parser.add_argument("--wandb-mode", default="online", choices=["online", "offline", "disabled"],
+                        help="run wandb del test (solo con --split test); disabled: niente wandb")
     args = parser.parse_args()
     if args.split == "test" and OUT["test"].exists() and not args.overwrite:
         raise SystemExit(f"{OUT['test']} esiste gia': il test si valuta una volta sola")
@@ -277,6 +308,8 @@ def main():
         np.savez_compressed(OUT_RANKS, narration_id=meta["narration_id"],
                             **{f"mask_{k}": v for k, v in masks.items()}, **ranks)
         print(f"salvato: {OUT_RANKS}")
+        if args.wandb_mode != "disabled":
+            log_to_wandb(rows, models, args.wandb_mode)
 
 
 if __name__ == "__main__":
