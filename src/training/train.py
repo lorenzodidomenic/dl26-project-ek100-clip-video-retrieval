@@ -1,130 +1,80 @@
-"""Training delle teste di proiezione con loss InfoNCE.
+"""Training delle teste di proiezione con loss InfoNCE, con PyTorch Lightning e wandb.
 
-Per ogni epoca:
-1. mescola il train e lo divide in mini-batch;
-2. per ogni batch: forward delle due teste, loss InfoNCE, backward, passo di AdamW;
-   con --positives frase|classe la loss e' multi-positivo (vedi loss.py), default diag;
-3. sul val: loss (a batch della stessa dimensione del train) e metriche testo -> video,
-   le stesse della baseline lineare (esatto, classe, combinazioni nuove);
-4. se il criterio sul val migliora salva il checkpoint, altrimenti conta le epoche senza
-   miglioramento e si ferma dopo --patience.
+Pezzi (come nei laboratori):
+- dati: FeaturePairs (utils/dataset.py) e due DataLoader, train mescolato a ogni epoca e val
+  con batch sempre uguali (permutazione fissa) per la loss;
+- RetrievalTask (training/task.py): il LightningModule con DualHead, InfoNCE e AdamW;
+  con --positives frase|classe la loss e' multi-positivo (vedi loss.py), default diag;
+- pl.Trainer con le callback:
+  EarlyStopping   si ferma dopo --patience epoche senza miglioramento del criterio sul val,
+  ModelCheckpoint salva l'epoca migliore sul val,
+  MetricHistoryCallback (training/callbacks.py) storico delle metriche, CSV e riga a schermo;
+- WandbLogger: curve, metriche e iperparametri su wandb (progetto WANDB_PROJECT).
 
+Metriche sul val a ogni epoca: testo -> video, le stesse della baseline lineare
+(esatto, classe, combinazioni nuove), sempre sull'intero val.
 Normalizzazione: media e deviazione dal solo train, salvate nel checkpoint (servono al test).
 Il test non viene mai usato qui.
 
-Output: experiments/logs/train_<nome>.csv (una riga per epoca) e
-experiments/checkpoints/<nome>.pt (epoca migliore sul val).
+Output: experiments/logs/train_<nome>.csv (una riga per epoca),
+experiments/checkpoints/<nome>.ckpt (epoca migliore sul val) e la run su wandb.
 """
 import argparse
 import csv
 import sys
-import time
+import warnings
 from pathlib import Path
 
-import numpy as np
+import pytorch_lightning as pl
 import torch
+import wandb
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.loggers import WandbLogger
+from torch.utils.data import DataLoader, Subset
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 
 from evaluation.linear_alignment import CRITERION, OUT as RIDGE_LOG  # noqa: E402
-from evaluation.linear_alignment import evaluate, unseen_mask  # noqa: E402
-from training.heads import DualHead  # noqa: E402
-from training.loss import InfoNCE  # noqa: E402
-from utils.features import load_pair, write_csv  # noqa: E402
+from evaluation.linear_alignment import unseen_mask  # noqa: E402
+from training.callbacks import MetricHistoryCallback  # noqa: E402
+from training.task import RetrievalTask  # noqa: E402
+# POSITIVES: quali coppie del batch sono positive nella loss (vedi loss.py e dataset.py):
+# diag = solo la propria (InfoNCE classica), frase = stessa narrazione, classe = stesso verbo e nome
+from utils.dataset import POSITIVES, FeaturePairs  # noqa: E402
 
 LOG_DIR = ROOT / "experiments/logs"
 CKPT_DIR = ROOT / "experiments/checkpoints"
-# quali coppie del batch sono positive nella loss (vedi loss.py):
-# diag = solo la propria (InfoNCE classica), frase = stessa narrazione, classe = stesso verbo e nome
-POSITIVES = ("diag", "frase", "classe")
+WANDB_DIR = ROOT / "experiments"     # wandb crea qui la cartella wandb/ (ignorata da git)
+WANDB_PROJECT = "dl26-ek100-clip-retrieval"
+VAL_SEED = 0        # seed della permutazione fissa dei batch della loss di val
+
+# i dati sono gia' tutti in memoria: processi in piu' per caricarli non servono
+warnings.filterwarnings("ignore", ".*does not have many workers.*")
 
 
-def positive_labels(meta, positives):
-    """Un'etichetta intera per clip: due clip con la stessa etichetta sono positive tra loro.
+def make_data(encoder, positives, batch, seed):
+    """Dataset di train e val, i loro DataLoader e l'ordine in cui il val loader produce le clip.
 
-    None per diag (solo la diagonale). Le etichette servono solo a confrontare righe dello
-    stesso batch, quindi possono essere numerate in modo indipendente per train e val.
+    Train: mescolato a ogni epoca, con un generatore dedicato al seed della run.
+    Val (solo per la loss): stessi batch a ogni epoca, presi da una permutazione fissa. In ordine
+    di split.csv i batch conterrebbero clip della stessa sessione (negativi piu' difficili) e la
+    loss non sarebbe confrontabile con quella di train; fissa, le sue variazioni tra un'epoca e
+    l'altra dipendono solo dal modello e non dal caso.
     """
-    if positives == "diag":
-        return None
-    if positives == "frase":
-        # frase identica = stesso input all'encoder di testo = stesso embedding testuale
-        keys = meta["narration"]
-    else:
-        keys = np.stack([meta["verb_class"], meta["noun_class"]], axis=1)
-    _, labels = np.unique(keys, axis=0, return_inverse=True)
-    return torch.from_numpy(labels.reshape(-1)).long()
-
-
-def load_data(encoder):
-    """Train e val come tensori, standardizzati con media e deviazione del solo train."""
-    video_tr, text_tr, meta_tr = load_pair(encoder, "train", normalize=False)   #prendiamo tensori training (nx768) e metadati
-    video_va, text_va, meta_va = load_pair(encoder, "val", normalize=False) #prendiamo tensori validation (nx768) e metadati
-    stats = {"video": (video_tr.mean(0), video_tr.std(0) + 1e-8),
-             "text": (text_tr.mean(0), text_tr.std(0) + 1e-8)}      #prendiamo media e dev std video training e text training
-
-    def norm(x, kind):
-        mean, std = stats[kind]
-        return torch.from_numpy((x - mean) / std).float()
-
-    train = (norm(video_tr, "video"), norm(text_tr, "text"))
-    val = (norm(video_va, "video"), norm(text_va, "text"))
-    stats = {k: tuple(torch.from_numpy(s).float() for s in v) for k, v in stats.items()}
-    return train, val, meta_tr, meta_va, unseen_mask(meta_tr, meta_va), stats    # unseen mask è un array boolenao lungo quanto il val. E' True per le clip di val la cui coppia 'verbo,nome' non compare nel train
-
-
-def batches(n, size, rng):
-    """Divide gli indici 0..n-1, mescolati con rng, in blocchi di al piu' size."""
-    order = torch.from_numpy(rng.permutation(n))    # genera un array con gli interi 0..n-1 in ordine casuale
-    for start in range(0, n, size):
-        yield order[start:start + size] # scorre gli indici a passo di size, ad esempio batch(10,3) produce 3 batches di lunghezza 3 ed uno di 1
-
-
-def train_epoch(model, loss_fn, opt, data, batch, rng, labels=None):  # pylint: disable=too-many-arguments
-    """Un passaggio sul train; ritorna la loss media per coppia.
-
-    labels: etichette dei positivi per clip (None = InfoNCE classica, solo la diagonale).
-    """
-    model.train()
-    video, text = data
-    total = 0.0
-    for idx in batches(len(video), batch, rng):
-        z_v, z_t = model(video[idx], text[idx])
-        loss = loss_fn(z_v, z_t, None if labels is None else labels[idx])
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-        total += loss.item() * len(idx) # loss è la media sul batch. per avere la media sull'epoca bisogna pesare ogni batch per la sua dimensione
-    return total / len(video)
-
-
-@torch.no_grad()
-def validate(model, loss_fn, data, batch, meta, unseen, labels=None):  # pylint: disable=too-many-arguments
-    """Loss e metriche di retrieval sul val, con il modello in modalita' eval.
-
-    La loss di val usa gli stessi positivi del training (labels), le metriche no: sono sempre
-    le stesse (esatto, classe, nuove) per qualunque scelta dei positivi.
-    """
-    model.eval()
-    z_v, z_t = model(*data)
-    # loss a batch della stessa dimensione del train, sempre con la stessa permutazione:
-    # in ordine di split.csv i batch conterrebbero clip della stessa sessione (negativi piu' difficili)
-    rng = np.random.default_rng(0)
-    # batch da 256 come nel training con seed fisso: permutazione la stessa ogni epoca così che le variazioni della loss dipendono solo dal dal modello e non dal caso
-    losses = [loss_fn(z_v[idx], z_t[idx], None if labels is None else labels[idx]).item() * len(idx)
-              for idx in batches(len(z_v), batch, rng)]
-    sim = (z_t @ z_v.T).cpu().numpy()                       # similarità tra tutti frasi e video del val
-
-    # evaluate è la funzione che ordina i video dal più simile al meno simile e calcola rango sia esatto che di classe
-    # ogni matrice calcolata due volte: su tutte le query e solo sulle query unseen
-    return sum(losses) / len(z_v), evaluate(sim, meta, unseen)  # ritorna loss media in validation e valutazione su validation set
+    ds_tr = FeaturePairs(encoder, "train", positives=positives)
+    ds_va = FeaturePairs(encoder, "val", stats=ds_tr.stats, positives=positives)
+    train_loader = DataLoader(ds_tr, batch_size=batch, shuffle=True,
+                              generator=torch.Generator().manual_seed(seed))
+    perm = torch.randperm(len(ds_va), generator=torch.Generator().manual_seed(VAL_SEED)).numpy()
+    val_loader = DataLoader(Subset(ds_va, perm.tolist()), batch_size=batch, shuffle=False)
+    return ds_tr, ds_va, train_loader, val_loader, perm
 
 
 def ridge_reference(encoder):
     """Legge il CSV della baseline lineare (ridge regression testo→video).
-      Prende la riga migliore per lo stesso encoder, quella con il valore di classe_R@10 più alto. 
+      Prende la riga migliore per lo stesso encoder, quella con il valore di classe_R@10 più alto.
       Serve solo a stampare alla fine un confronto: "la MLP batte la baseline lineare?". Se il file non esiste restituisce None."""
     if not RIDGE_LOG.exists():
         return None
@@ -163,8 +113,15 @@ def parse_args(argv=None):
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--device", default="cpu", choices=["cpu", "mps", "cuda"])
+    # CPU di default (roadmap P4): con un modello cosi' piccolo MPS guadagna poco, e su MPS
+    # lo stesso seed non garantisce lo stesso risultato
+    parser.add_argument("--accelerator", default="cpu", choices=["auto", "cpu", "mps", "cuda"],
+                        help="device di pl.Trainer (default cpu; auto: GPU/MPS se c'e')")
     parser.add_argument("--name", help="nome della run (default: dagli iperparametri)")
+    parser.add_argument("--group",
+                        help="gruppo della run su wandb (es. griglia, seed, loss, finale)")
+    parser.add_argument("--wandb-mode", default="online", choices=["online", "offline", "disabled"],
+                        help="offline: salva in locale, poi 'wandb sync'; disabled: niente wandb")
     args = parser.parse_args(argv)
     if args.name is None:
         args.name = run_name(args)
@@ -174,59 +131,43 @@ def parse_args(argv=None):
 def main():  # pylint: disable=too-many-locals
     """Training con early stopping sul criterio di val; salva log e checkpoint migliore."""
     args = parse_args()
-    torch.manual_seed(args.seed)
-    rng = np.random.default_rng(args.seed)
-    device = torch.device(args.device)
+    pl.seed_everything(args.seed)                           # inizializzazione dei pesi e dropout
 
-    train, val, meta_tr, meta_va, unseen, stats = load_data(args.encoder)
-    train = tuple(x.to(device) for x in train)
-    val = tuple(x.to(device) for x in val)
-    labels_tr, labels_va = (positive_labels(m, args.positives) for m in (meta_tr, meta_va))
-    if labels_tr is not None:
-        labels_tr, labels_va = labels_tr.to(device), labels_va.to(device)
+    ds_tr, ds_va, train_loader, val_loader, perm = make_data(
+        args.encoder, args.positives, args.batch, args.seed)
+    # True per le clip di val la cui coppia (verbo, nome) non compare nel train
+    unseen = unseen_mask(ds_tr.meta, ds_va.meta)
+    # il task riceve gli embedding di val nell'ordine del val loader (perm): metadati e maschera
+    # vanno riordinati allo stesso modo, cosi' la riga i della similarita' e' ancora la clip i
+    task = RetrievalTask(ds_tr.video.shape[1], ds_tr.text.shape[1], args.hidden, args.dim,
+                         args.dropout, args.lr, args.weight_decay, args.fixed_tau,
+                         stats=ds_tr.stats,
+                         val_meta={k: v[perm] for k, v in ds_va.meta.items()},
+                         val_unseen=unseen[perm])
 
-    model = DualHead(train[0].shape[1], train[1].shape[1],
-                     args.hidden, args.dim, args.dropout).to(device)
-    loss_fn = InfoNCE(learnable_tau=not args.fixed_tau).to(device)
-    # niente weight decay su tau: la spingerebbe verso 1 (log tau verso 0) senza motivo
-    opt = torch.optim.AdamW([
-        {"params": model.parameters(), "weight_decay": args.weight_decay},
-        {"params": loss_fn.parameters(), "weight_decay": 0.0},
-    ], lr=args.lr)
+    monitor = f"val/{CRITERION}"
+    # min_delta 0 e confronto stretto: migliora solo un valore strettamente maggiore,
+    # quindi l'epoca salvata e' la prima con il massimo (come assume anche p4_grid.py)
+    early_stop = EarlyStopping(monitor=monitor, mode="max", patience=args.patience)
+    checkpoint = ModelCheckpoint(dirpath=CKPT_DIR, filename=args.name, monitor=monitor,
+                                 mode="max", save_top_k=1, save_weights_only=True,
+                                 enable_version_counter=False)   # sovrascrive, niente <nome>-v1
+    history = MetricHistoryCallback(LOG_DIR / f"train_{args.name}.csv", CRITERION)
 
-    log_path = LOG_DIR / f"train_{args.name}.csv"
-    ckpt_path = CKPT_DIR / f"{args.name}.pt"
-    CKPT_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"run {args.name}: train {len(train[0])}, val {len(val[0])}, device {device}")
-    print(f"{'epoca':>5}{'loss tr':>9}{'loss val':>10}{'tau':>7}"
-          f"{'esatto R@10':>13}{'classe R@10':>13}{'s':>6}")
+    logger = WandbLogger(project=WANDB_PROJECT, name=args.name, group=args.group,
+                         save_dir=str(WANDB_DIR), mode=args.wandb_mode, config=vars(args))
+    trainer = pl.Trainer(max_epochs=args.epochs, accelerator=args.accelerator, devices=1,
+                         logger=logger, callbacks=[early_stop, checkpoint, history],
+                         enable_progress_bar=False,         # una riga per epoca dalla callback
+                         enable_model_summary=False)
 
-    rows, best, waited = [], None, 0
-    for epoch in range(1, args.epochs + 1):
-        start = time.time()
-        train_loss = train_epoch(model, loss_fn, opt, train, args.batch, rng, labels_tr)
-        val_loss, metrics = validate(model, loss_fn, val, args.batch, meta_va, unseen, labels_va)
-        rows.append({"epoca": epoch, "loss_train": round(train_loss, 4),
-                     "loss_val": round(val_loss, 4), "tau": round(loss_fn.tau.item(), 4),
-                     **metrics})
-        write_csv(log_path, rows)                           # riscritto a ogni epoca
+    print(f"run {args.name}: train {len(ds_tr)}, val {len(ds_va)}, "
+          f"device {trainer.accelerator.__class__.__name__}")
+    trainer.fit(task, train_loader, val_loader)
 
-        improved = best is None or metrics[CRITERION] > best[CRITERION]
-        print(f"{epoch:>5}{train_loss:>9.4f}{val_loss:>10.4f}{loss_fn.tau.item():>7.3f}"
-              f"{metrics['esatto_R@10']:>13.2f}{metrics['classe_R@10']:>13.2f}"
-              f"{time.time() - start:>6.1f}{'  *' if improved else ''}")
-
-        if improved:
-            best, waited = rows[-1], 0
-            torch.save({"model": model.state_dict(), "loss": loss_fn.state_dict(),
-                        "stats": stats, "args": vars(args), "epoch": epoch,
-                        "metrics": metrics}, ckpt_path)
-        else:
-            waited += 1
-            if waited >= args.patience:
-                print(f"nessun miglioramento di {CRITERION} da {args.patience} epoche, stop")
-                break
-
+    if early_stop.stopped_epoch > 0:
+        print(f"nessun miglioramento di {CRITERION} da {args.patience} epoche, stop")
+    best = history.best
     print(f"\nmigliore: epoca {best['epoca']}, {CRITERION} {best[CRITERION]:.2f}, "
           f"esatto R@1/5/10 {best['esatto_R@1']:.2f} / {best['esatto_R@5']:.2f} / "
           f"{best['esatto_R@10']:.2f}, nuove classe R@10 {best['nuove_classe_R@10']:.2f}")
@@ -235,7 +176,8 @@ def main():  # pylint: disable=too-many-locals
         print(f"ridge (val, λ={float(ref['lambda']):g}): {CRITERION} {float(ref[CRITERION]):.2f}, "
               f"esatto R@10 {float(ref['esatto_R@10']):.2f}, "
               f"nuove classe R@10 {float(ref['nuove_classe_R@10']):.2f}")
-    print(f"log: {log_path}\ncheckpoint: {ckpt_path}")
+    print(f"log: {history.log_path}\ncheckpoint: {checkpoint.best_model_path}")
+    wandb.finish()
 
 
 if __name__ == "__main__":

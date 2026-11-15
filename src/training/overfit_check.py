@@ -9,6 +9,8 @@ vettore testo, e il modello non puo' sapere quale dei loro video e' quello giust
 ripetute R@1 non supera (frasi distinte / N) e la loss non scende sotto sum(k log k) / N.
 
 Usa solo il train. Il dropout e' disattivato, altrimenti il test non puo' arrivare a zero.
+Dati: FeaturePairs del train (standardizzato con le statistiche del train intero), poi un
+Subset con le N coppie scelte e un DataLoader full batch (un solo batch con tutte le N coppie).
 """
 import argparse
 import sys
@@ -16,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader, Subset
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -23,7 +26,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from evaluation.metrics import exact_relevance, retrieval_metrics  # noqa: E402
 from training.heads import DualHead  # noqa: E402
 from training.loss import InfoNCE  # noqa: E402
-from utils.features import load_pair  # noqa: E402
+from utils.dataset import FeaturePairs  # noqa: E402
 
 LOSS_OK = 0.05      # loss finale sotto cui consideriamo il test superato
 R1_OK = 95.0        # R@1 finale sul sottoinsieme sopra cui consideriamo il test superato
@@ -41,16 +44,11 @@ def distinct_sample(narrations, n, rng):
     raise ValueError(f"solo {len(idx)} frasi distinte, meno di {n}")
 
 
-def standardize(train, other):
-    """Standardizza entrambe le matrici con media e deviazione del solo train."""
-    mean, std = train.mean(0), train.std(0) + 1e-8
-    return (train - mean) / std, (other - mean) / std
-
-
 @torch.no_grad()
-def evaluate(model, video, text):
+def evaluate(model, loader):
     """R@1/5/10 esatto sul sottoinsieme: ogni testo deve trovare il suo video."""
     model.eval()
+    video, text, _ = next(iter(loader))                     # full batch: tutto il sottoinsieme
     z_v, z_t = model(video, text)
     sim = (z_t @ z_v.T).numpy()
     return retrieval_metrics(sim, exact_relevance(len(sim)))
@@ -71,14 +69,11 @@ def main():
     rng = np.random.default_rng(args.seed)
 
     # statistiche di normalizzazione dal train intero, poi si prende il sottoinsieme
-    video_all, text_all, meta = load_pair(args.encoder, "train", normalize=False)
-    video_all, _ = standardize(video_all, video_all)
-    text_all, _ = standardize(text_all, text_all)
-    idx = distinct_sample(meta["narration"], args.n, rng)
-    video = torch.from_numpy(video_all[idx]).float()
-    text = torch.from_numpy(text_all[idx]).float()
+    train = FeaturePairs(args.encoder, "train")
+    idx = distinct_sample(train.meta["narration"], args.n, rng)
+    loader = DataLoader(Subset(train, idx.tolist()), batch_size=args.n, shuffle=False)
 
-    model = DualHead(video.shape[1], text.shape[1], dropout=0.0)
+    model = DualHead(train.video.shape[1], train.text.shape[1], dropout=0.0)
     loss_fn = InfoNCE()
     params = [*model.parameters(), *loss_fn.parameters()]
     opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=1e-2)
@@ -88,18 +83,19 @@ def main():
 
     for step in range(1, args.steps + 1):
         model.train()
-        z_v, z_t = model(video, text)
-        loss = loss_fn(z_v, z_t)
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+        for video, text, _ in loader:                       # un solo batch (full batch)
+            z_v, z_t = model(video, text)
+            loss = loss_fn(z_v, z_t)                        # InfoNCE classica, solo la diagonale
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
 
         if step == 1 or step % 50 == 0:
-            m = evaluate(model, video, text)
+            m = evaluate(model, loader)
             print(f"{step:>6}{loss.item():>10.4f}{loss_fn.tau.item():>8.3f}"
                   f"{m['R@1']:>8.1f}{m['R@10']:>8.1f}")
 
-    m = evaluate(model, video, text)
+    m = evaluate(model, loader)
     passed = loss.item() < LOSS_OK and m["R@1"] >= R1_OK
     print(f"\nfinale: loss {loss.item():.4f}, R@1 {m['R@1']:.1f}%, R@10 {m['R@10']:.1f}%")
     print("overfit: SUPERATO" if passed else "overfit: NON superato, controlla allineamento e loss")
