@@ -107,17 +107,29 @@ Per le metriche, riporta a NumPy con `.detach().cpu().numpy()`, così `retrieval
 
 Un modello che, su **test**, fa text→video meglio della baseline lineare.
 
+**Risultati sul test** (dataset completo, 9668 clip; P6, `experiments/final/final_test.csv`).
+R@1/5/10 e rango mediano sono *esatti* (giusto = stesso `narration_id`); "nuove combinazioni" =
+query con coppia verbo/nome assente dal train (420), giusto = stessa classe. Valori in %;
+media ± dev. std sui seed (baseline 10, MLP 3).
+
 | Modello | R@1 | R@5 | R@10 | rango mediano | classe R@10 | nuove combinazioni R@10 |
 |---|---|---|---|---|---|---|
-| Caso (K/N) | 0.04% | 0.22% | 0.44% | ~N/2 | — | — |
-| Ridge lineare (MPNet, λ=100) | 3.07% | 10.45% | 16.06% | 96 | 57.38% | 28.35% |
-| Contrastivo (MLP) | | | | | | |
+| Caso (K/N) | 0.01 | 0.05 | 0.10 | 4834.5 (≈N/2) | 5.14 | 0.71 |
+| Baseline: proiezioni casuali non allenate | 0.01 ± 0.01 | 0.05 ± 0.02 | 0.10 ± 0.04 | 4773 ± 208 | 4.22 ± 1.53 | 0.81 ± 1.69 |
+| Ridge lineare (MPNet, λ=1000 scelto sul val) | 1.07 | 3.85 | 6.33 | 491 | 50.16 | 10.48 |
+| Contrastivo (MLP), loss `diag` | 2.90 ± 0.16 | 10.23 ± 0.23 | **15.97 ± 0.26** | **115 ± 2** | 70.52 ± 0.50 | 15.24 ± 0.83 |
+| **Contrastivo (MLP), loss `classe` (finale)** | 2.40 ± 0.11 | 8.76 ± 0.38 | 13.61 ± 0.50 | 140 ± 3 | **72.89 ± 1.38** | **16.51 ± 2.70** |
 
-Riferimenti già noti:
-- **Baseline casuale (fase 3), test**: R@1 0.044%, R@5 0.133%, R@10 0.222%.
-- **Ridge lineare (fase 4), MPNet λ=100**: val R@10 esatto 14.5%, R@10 classe 59.6%; test R@10 esatto 16.06%, R@10 classe 57.38% (`experiments/logs/linear_alignment_test.csv`).
+Modello finale: MPNet, H=1024, d=128, dropout 0.3, lr 1e-4, batch 512, τ fissa, loss multi-positivo
+`classe` (vedi `docs/roadmap_p6_test.md` e `experiments/final/manifest.json`). Trade-off rispetto a
+`diag`: +2.4 su classe R@10 (+3.6 su classe R@1), −2.4 su esatto R@10.
+
+Valori del subset a 4 partecipanti (ridge test: esatto R@10 16.06%, classe R@10 57.38%, in
+`experiments/logs/subset4p/`): **non confrontabili** con questi, perche' il numero di video
+candidati per query e' molto piu' piccolo.
 
 **Criterio di successo:** supera il ridge su R@10 esatto e R@10 classe, sul val (per la scelta) e sul test (una volta sola).
+**Esito (test): superato.** Esatto R@10 13.61 contro 6.33 del ridge, classe R@10 72.89 contro 50.16.
 
 Se non lo supera, il report resta valido ma il messaggio cambia: la loss contrastiva non aggiunge nulla rispetto a una proiezione lineare. Va dichiarato.
 
@@ -302,6 +314,6 @@ Regole:
 - [x] P3 prima run completa su MPNet
 - [x] P4 config scelta sul val (subset; da rifare sul dataset completo)
 - [ ] P5 encoder di testo scelto con 3 seed
-- [ ] P6 valutazione finale sul test, una sola volta
+- [x] P6 valutazione finale sul test, una sola volta (`docs/roadmap_p6_test.md`)
 - [ ] P7 analisi qualitativa e grafici
 - [ ] Tabella finale nel report (`docs/REPORT.md`)
