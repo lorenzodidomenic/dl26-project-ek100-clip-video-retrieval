@@ -471,8 +471,75 @@ pareggio invertito dall'arrotondamento).
 training. È uno zero-shot lessicale, complementare a quello sui nomi mai visti (sopra), dove su
 24 query il ridge aveva il rango mediano migliore: misurano cose diverse.
 
-**Da fare (dopo):** demo qualitativa con clip esterne in prima persona (es. Pexels/Pixabay
-"pov cooking"), solo per le slide: il cambio di dominio non permette di usarla come misura.
+#### Demo con clip esterne
+**Obiettivo:** far vedere, su video che il modello non ha mai visto (né nel train né nel test di
+EPIC), che una frase scritta da noi trova la clip giusta. È una **dimostrazione per le slide, non
+una misura**: poche clip, da un dominio diverso (video stock, non GoPro in testa).
+
+**Dati (fatto).** 6 clip di Pexels (licenza Pexels), tagliate sull'azione, lato corto 480 pixel,
+senza audio, in `data/demo/clips/` (fuori da git: i video non si ridistribuiscono). Frasi, tagli,
+file originali e link in `experiments/demo/clips.csv` (su git):
+
+| Clip | Frase | Nota |
+|---|---|---|
+| `put_mince.mp4` | put minced meat in pan | |
+| `crack_egg.mp4` | crack egg into pan | |
+| `pour_cream.mp4` | pour cream into pan | |
+| `open_bag_cheese.mp4` | open bag of cheese | |
+| `pour_milk.mp4` | pour milk into bowl | |
+| `cut_watermelon.mp4` | cut watermelon | *watermelon* assente dal train: video e parola nuovi |
+
+Scartate le anteprime iStock (a pagamento, con filigrana) e le clip non in prima persona o con
+più azioni montate.
+
+**Scelte fissate prima di vedere i risultati:**
+- modello: MLP `classe` seed 0 (D4), lo stesso delle figure di P6 e P7;
+- frasi: quelle del CSV, scritte prima di lanciare il modello. Se dopo si cambia una frase o una
+  clip, va dichiarato;
+- video trattati come EPIC: 8 frame a distanza uniforme tra primo e ultimo
+  (`uniform_indices` di `cut_clips.py`), preprocessing del processor TimeSformer, token CLS.
+
+**Passi:**
+1. **Script `src/evaluation/demo_clip_esterne.py`.** Per ogni clip: 8 frame → TimeSformer
+   (768) → testa video del modello finale; per ogni frase: MPNet (768) → testa testo. La
+   standardizzazione usa media e dev. std del train salvate nel checkpoint, come in P6. Ne esce
+   la matrice di coseno frasi × clip (6 × 6).
+2. **Figura `figures/demo_clip_esterne.png`.** In alto una miniatura per clip, a sinistra le
+   frasi; in ogni cella la probabilità che la frase scelga quella clip (softmax della riga,
+   τ = 0.07, come `p6_matrice_similarita.png`); diagonale bordata = coppia giusta. Nel titolo:
+   quante frasi su 6 trovano la loro clip al primo posto (caso: 1 su 6).
+3. **Opzione `--query "frase"`.** Stampa la classifica delle 6 clip per una frase libera, per
+   provare dal vivo all'esame anche parole mai viste (es. "slice watermelon", "add parmesan").
+4. *(Facoltativo)* dashboard Gradio con la stessa logica: solo se avanza tempo.
+5. **Chiusura:** esito e limiti qui e nelle slide.
+
+Passi 1–3 fatti. Le feature delle clip sono salvate in `data/demo/clip_features.npz` (fuori da
+git) e si ricalcolano solo se le clip cambiano. Spiegazione della figura e della formula in
+`figures/demo_clip_esterne.md`.
+
+**Esito: 4 frasi su 6** trovano la loro clip al primo posto (a caso: 1 su 6).
+
+| Frase | Primo posto | Probabilità della clip giusta |
+|---|---|---|
+| open bag of cheese | ✔ sua clip | 98% |
+| pour milk into bowl | ✔ sua clip | 64% |
+| put minced meat in pan | ✔ sua clip | 60% |
+| cut watermelon (parola mai vista) | ✔ sua clip | 56% |
+| crack egg into pan | ✘ `pour_cream` (55%) | 30% (seconda) |
+| pour cream into pan | ✘ `put_mince` (42%) | 18% (terza) |
+
+**Lettura:**
+- Lo zero-shot completo funziona: clip e parola *watermelon* sono entrambe nuove.
+- I due errori sono tra clip "in padella" (uova, panna, carne): a scena simile il modello
+  confonde, coerente con F3 e F4 di P7. La clip con lo sfondo più diverso (sacchetto) è la più
+  netta.
+- Frasi libere (`--query`): «slice watermelon» → `cut_watermelon` (45%); «add parmesan to rice»
+  → `open_bag_cheese` (87%); «break an egg» → `crack_egg`, ma di poco (36% contro 33%).
+
+**Limiti da dichiarare:** 6 clip non sono una misura (un errore vale 17 punti); 4 su 6 sono "in
+padella", quindi il modello deve distinguere l'oggetto nella stessa scena; video stock diversi da
+EPIC (stabilizzati, inquadratura diversa). Le percentuali dipendono da quante clip ci sono:
+con più clip si abbassano.
 
 ### P8 · Estensioni (opzionali)
 - Loss multi-positivo: **fatta**, ed entrata nella scelta del modello finale (vedi esito di P4 sul
@@ -507,6 +574,8 @@ training. È uno zero-shot lessicale, complementare a quello sui nomi mai visti 
 | `*/subset4p/`, `figures/figures4p/` | archivio dello studio pilota sul subset di 4 partecipanti (split, feature testo, log, checkpoint, figure) |
 | `src/evaluation/p7_analysis.py` | R@10 per verbo e per frequenza, tipi di errore e coppie confuse del top-1 (P7) |
 | `src/evaluation/zero_shot_sinonimi.py` | zero-shot sulle parole: frasi del test con sinonimi mai visti in training |
+| `src/evaluation/demo_clip_esterne.py` | demo su clip esterne (Pexels): figura frasi × clip e `--query` per frasi libere |
+| `experiments/demo/clips.csv` | clip della demo: frase, taglio, file originale, link e licenza (i video stanno in `data/demo/clips/`) |
 | `experiments/configs/*.yaml` | non usato: la config di ogni run sta nel suo nome, nel checkpoint e su wandb |
 | `experiments/checkpoints/` | pesi migliori (fuori da git) |
 | `experiments/logs/` | un CSV per run, più i CSV di riepilogo (P4, ridge, baseline, encoder) |
@@ -526,6 +595,6 @@ training. È uno zero-shot lessicale, complementare a quello sui nomi mai visti 
 - [x] P7 analisi qualitativa e grafici (t-SNE, R@10 per verbo e per frequenza, tipi di errore, coppie confuse)
 - [x] Zero-shot: definizione e risultati sui sottoinsiemi del test (D3)
 - [x] Zero-shot: frasi con parole mai viste (sinonimi)
-- [ ] Zero-shot: demo con clip esterne (per le slide)
+- [x] Zero-shot: demo con clip esterne (6 clip Pexels, 4 su 6 al primo posto)
 - [x] P8 loss multi-positivo
 - [ ] Tabella finale e figure nella relazione
