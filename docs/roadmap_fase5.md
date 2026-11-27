@@ -379,6 +379,101 @@ Non fatti, per scelta: matrice di confusione completa dei verbi (78 verbi, poco 
 sostituita da F3 e F4), distanza tra centroidi (il t-SNE non mostra modality gap), esempi
 qualitativi di retrieval (provati e scartati).
 
+### Zero-shot (obiettivo minimo 4 della consegna)
+**Richiesta:** *"Explicitly define and test zero-shot capabilities acting on entirely unseen
+verbs/nouns"*: interrogare il modello con verbi o nomi che non ha mai visto in training.
+
+**Definizione** (D3 di `docs/roadmap_p6_test.md`, fissata prima del test). "Mai visto" = assente
+dal **train**, l'unico split da cui le teste hanno imparato; verbo = `verb_class`, nome =
+`noun_class`. Tre sottoinsiemi di query del test, valutati come tutte le altre (candidati = tutti
+i 9668 video, giusto = stessa classe verbo+nome):
+
+| Sottoinsieme | Query | Cosa misura |
+|---|---|---|
+| combinazione verbo+nome mai vista | 420 | verbo e nome visti, mai insieme: composizione |
+| nome mai visto | 24 (4 nomi) | zero-shot vero sui nomi |
+| verbo mai visto | 2 (1 frase) | zero-shot vero sui verbi |
+
+**Risultati sul test** (`experiments/final/final_test.csv`; MLP media ± dev. std su 3 seed):
+
+| Modello | combinazione nuova: classe R@10 | rango mediano | nome nuovo: classe R@10 | rango mediano |
+|---|---|---|---|---|
+| Caso | 0.71 | 2743 | 0.00 | 1072 |
+| Baseline casuale | 0.81 ± 1.69 | 3522 ± 422 | 0.00 | 3482 ± 1707 |
+| Ridge (λ=1000) | 10.48 | 475 | 0.00 | **66.5** |
+| MLP `diag` | 14.13 ± 0.96 | **157 ± 20** | 0.00 | 702 ± 636 |
+| MLP `classe` (finale) | **14.76 ± 0.95** | 192 ± 27 | 4.17 ± 4.17 | 343 ± 278 |
+
+**Lettura:**
+- **Combinazioni nuove:** la sola misura con abbastanza query. Gli MLP battono il ridge (14.8
+  contro 10.5 di classe R@10, rango mediano circa 2.5 volte migliore), ma restano molto sotto le
+  query di classi viste (73.7): il modello compone poco. Vedi anche F2 di P7 e `p6_zero_shot.png`.
+- **Nomi mai visti:** R@10 quasi nullo per tutti, ma sul rango mediano il **ridge è migliore**
+  degli MLP (66.5 contro 343 e 702). Un'ipotesi coerente: il ridge, lineare e molto regolarizzato,
+  conserva di più la geometria di MPNet, mentre gli MLP si specializzano sulle classi del train.
+  Va presa con cautela: sono 24 clip di soli 4 nomi (quorn 14, asparagus 6, computer 2,
+  door:kitchen 2) e la dev. std sui seed è enorme. Due casi sono quasi sinonimi di classi viste:
+  "move mouse" (classe computer) e "open/close kitchen door" (classe door:kitchen, distinta da door).
+- **Verbo mai visto:** 2 clip con la stessa frase, "scoop potatoes onto baking tray", annotata con
+  il verbo *bake*. La parola "scoop" è nel train: è un caso di etichetta, non una parola nuova.
+  Nessun modello la trova nei primi 10 (rango classe migliore: MLP `diag`, 235).
+
+**Limite da dichiarare:** il test contiene troppe poche parole del tutto nuove per una misura
+affidabile dello zero-shot vero sulle classi. Per questo si aggiunge lo zero-shot sulle parole,
+qui sotto.
+
+#### Zero-shot sulle parole: sinonimi mai visti
+**Domanda:** se nella frase cercata una parola viene sostituita con un sinonimo che le teste non
+hanno mai visto (es. "wash pan" → "wash skillet"), il modello trova ancora i video giusti? MPNet,
+congelato e preaddestrato, conosce il sinonimo; le teste MLP e il ridge no. Nessun training: le
+feature video del test sono già estratte, si ricodificano solo le frasi.
+
+**Scelte fissate prima di vedere i risultati** (`src/evaluation/zero_shot_sinonimi.py`):
+- 9 nomi e 4 verbi, con sinonimo assente da tutte le frasi di train e val (1615 parole; lo script
+  lo controlla e si ferma se non è vero): pan → skillet, plate → platter, tap → faucet,
+  bag → sack, glass → tumbler, potato → spud, bin → trashcan, counter → worktop,
+  hob → stovetop; take → grasp, wash → cleanse, pour → decant, move → relocate. Scartati i
+  sinonimi già nel train (place, grab, rinse, cabinet, mug, stir…), quelli che contengono la
+  parola originale (teakettle, stockpot), antiquati (icebox) o sgrammaticati (deposit).
+- Si sostituisce la parola intera (pan sì, pans no); per i verbi solo se non è seguita da una
+  particella ("take knife" → "grasp knife", "take out knife" escluso). Una parola cambiata per
+  frase: 1886 frasi con un nome sostituito, 1671 con un verbo.
+- Stesse frasi, originale contro riscritta, codificate ora con MPNet; metriche come D2
+  (candidati = tutti i 9668 video del test, giusto = stessa classe verbo+nome); ridge, MLP
+  `diag` e `classe` con 3 seed.
+
+**Controlli:** frasi originali ricodificate uguali a `mpnet.npz` (differenza massima 2e-7);
+ranghi di classe delle frasi originali identici a P6 per tutti i 6 MLP (ridge: 1 su 3557,
+pareggio invertito dall'arrotondamento).
+
+**Risultati** (classe R@10; MLP media ± dev. std su 3 seed; `experiments/final/zero_shot_sinonimi.csv`,
+`figures/zero_shot_sinonimi.png`):
+
+| Modello | nomi: originale | nomi: sinonimo | verbi: originale | verbi: sinonimo |
+|---|---|---|---|---|
+| Ridge (λ=1000) | 52.0 | 49.1 | 50.9 | 31.6 |
+| MLP `diag` | 77.0 ± 1.1 | 56.1 ± 3.6 | 70.4 ± 1.8 | 59.9 ± 4.1 |
+| **MLP `classe` (finale)** | **79.9 ± 1.8** | **72.0 ± 3.2** | **73.5 ± 1.0** | **66.2 ± 3.1** |
+
+**Lettura:**
+- **Il modello finale regge le parole nuove:** perde 7–8 punti, ma con il sinonimo resta molto
+  sopra il ridge con la parola originale (72 contro 52). Sfrutta ciò che MPNet sa delle parole,
+  non solo il vocabolario del train.
+- **La loss `classe` generalizza meglio di `diag`:** sui nomi `diag` perde 21 punti, `classe` 8.
+  Ipotesi: `classe` avvicina frasi diverse della stessa classe ("take pan", "pick up pan"), quindi
+  impara il significato più che la formulazione esatta.
+- **Il ridge crolla sui verbi** (−19), molto meno sui nomi (−3).
+- **Per parola** (MLP finale): quasi invariate tap → faucet (95.5 → 91.6), pan → skillet
+  (73.7 → 73.0), move → relocate (33.3 → 33.1); in forte calo glass → tumbler (90.6 → 57.5) e
+  potato → spud (75.8 → 54.3), parole più rare o informali (tumbler è anche ambiguo).
+
+**Limite:** qui è nuova la parola, non l'oggetto: il video mostra sempre una classe vista in
+training. È uno zero-shot lessicale, complementare a quello sui nomi mai visti (sopra), dove su
+24 query il ridge aveva il rango mediano migliore: misurano cose diverse.
+
+**Da fare (dopo):** demo qualitativa con clip esterne in prima persona (es. Pexels/Pixabay
+"pov cooking"), solo per le slide: il cambio di dominio non permette di usarla come misura.
+
 ### P8 · Estensioni (opzionali)
 - Loss multi-positivo: **fatta**, ed entrata nella scelta del modello finale (vedi esito di P4 sul
   dataset completo). Opzione `positives` di `train.py`: `diag` (InfoNCE classica), `frase` (positivi
@@ -411,6 +506,7 @@ qualitativi di retrieval (provati e scartati).
 | `experiments/archivio_v1/` | checkpoint, log e risultati del test della pipeline v1 |
 | `*/subset4p/`, `figures/figures4p/` | archivio dello studio pilota sul subset di 4 partecipanti (split, feature testo, log, checkpoint, figure) |
 | `src/evaluation/p7_analysis.py` | R@10 per verbo e per frequenza, tipi di errore e coppie confuse del top-1 (P7) |
+| `src/evaluation/zero_shot_sinonimi.py` | zero-shot sulle parole: frasi del test con sinonimi mai visti in training |
 | `experiments/configs/*.yaml` | non usato: la config di ogni run sta nel suo nome, nel checkpoint e su wandb |
 | `experiments/checkpoints/` | pesi migliori (fuori da git) |
 | `experiments/logs/` | un CSV per run, più i CSV di riepilogo (P4, ridge, baseline, encoder) |
@@ -428,5 +524,8 @@ qualitativi di retrieval (provati e scartati).
 - [x] P5 confronto encoder con 3 seed (MPNet contro BERT, fatto dopo P6: solo informativo)
 - [x] P6 valutazione finale sul test, una sola volta per pipeline (`docs/roadmap_p6_test.md`)
 - [x] P7 analisi qualitativa e grafici (t-SNE, R@10 per verbo e per frequenza, tipi di errore, coppie confuse)
+- [x] Zero-shot: definizione e risultati sui sottoinsiemi del test (D3)
+- [x] Zero-shot: frasi con parole mai viste (sinonimi)
+- [ ] Zero-shot: demo con clip esterne (per le slide)
 - [x] P8 loss multi-positivo
 - [ ] Tabella finale e figure nella relazione
