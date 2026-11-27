@@ -9,11 +9,11 @@ Da seguire passo dopo passo. Ogni passo ha un obiettivo, le visualizzazioni da p
 
 | Fase | Cosa | Stato | File |
 |---|---|---|---|
-| 1–2 | Estrazione feature (TimeSformer, MPNet, BERT, CLIP) e split | fatto | `src/datasets/`, `data/features/` |
-| 3 | Baseline zero-shot: proiezione casuale, il "pavimento" | fatto | `src/evaluation/baseline_zero_shot.py` |
-| 4 | Allineamento lineare (ridge in forma chiusa), riferimento da battere | fatto (val e test) | `src/evaluation/linear_alignment.py` |
-| 5 | Modello allenato: teste MLP + loss InfoNCE | **in corso** (P0–P4 fatti sul subset di 4 partecipanti; da rifare sul dataset completo) | `src/training/` |
-| 6 | Metriche riusabili, analisi e estensioni | parziale | `src/evaluation/metrics.py` |
+| 1–2 | Estrazione feature (TimeSformer, MPNet, BERT, CLIP) e split | fatto (dataset completo: 633 sessioni; testo solo MPNet e BERT) | `src/datasets/`, `data/features/` |
+| 3 | Baseline zero-shot: proiezione casuale, il "pavimento" | fatto (seed separati per testo e video) | `src/evaluation/baseline_zero_shot.py` |
+| 4 | Allineamento lineare (ridge in forma chiusa), riferimento da battere | fatto (val e test, dataset completo) | `src/evaluation/linear_alignment.py` |
+| 5 | Modello allenato: teste MLP + loss InfoNCE | **fatto** sul dataset completo (P0–P6; pipeline v2 con Dataset/DataLoader, PyTorch Lightning e wandb). Studio pilota sul subset di 4 partecipanti archiviato in `subset4p` | `src/training/` |
+| 6 | Metriche riusabili, analisi e estensioni | fatto (multi-positivo, P7 analisi qualitativa) | `src/evaluation/` |
 
 ---
 
@@ -73,6 +73,13 @@ L = ½ · [ CE(S, diagonale) + CE(S^T, diagonale) ]
 4. Fine epoca: loss di validazione e R@1/5/10 sul val, con la stessa definizione di `retrieval_metrics`.
 5. Early stopping: fermati se R@10 sul val non migliora per 10 epoche. Salva il miglior checkpoint in `experiments/checkpoints/`.
 
+**Implementazione attuale (pipeline v2).** I dati passano da `FeaturePairs` e `DataLoader`
+(`src/utils/dataset.py`); teste, loss e AdamW stanno in un `LightningModule` (`task.py`), il ciclo
+e' un `pl.Trainer` con `EarlyStopping` e `ModelCheckpoint` su `val/classe_R@10` (`train.py`).
+Le statistiche di standardizzazione del train sono buffer del modello, quindi finiscono nel
+checkpoint. Log per epoca in CSV (`callbacks.py`) e su wandb (progetto `dl26-ek100-clip-retrieval`).
+Device di default: CPU.
+
 **Cosa aspettarsi:**
 - La loss di train scende.
 - La loss di val scende, poi risale quando il modello memorizza.
@@ -107,29 +114,35 @@ Per le metriche, riporta a NumPy con `.detach().cpu().numpy()`, così `retrieval
 
 Un modello che, su **test**, fa text→video meglio della baseline lineare.
 
-**Risultati sul test** (dataset completo, 9668 clip; P6, `experiments/final/final_test.csv`).
-R@1/5/10 e rango mediano sono *esatti* (giusto = stesso `narration_id`); "nuove combinazioni" =
-query con coppia verbo/nome assente dal train (420), giusto = stessa classe. Valori in %;
-media ± dev. std sui seed (baseline 10, MLP 3).
+**Risultati sul test** (dataset completo, 9668 clip; P6 con la pipeline v2,
+`experiments/final/final_test.csv`). R@1/5/10 e rango mediano sono *esatti* (giusto = stesso
+`narration_id`); "nuove combinazioni" = query con coppia verbo/nome assente dal train (420),
+giusto = stessa classe. Valori in %; media ± dev. std sui seed (baseline 10, MLP 3).
 
 | Modello | R@1 | R@5 | R@10 | rango mediano | classe R@10 | nuove combinazioni R@10 |
 |---|---|---|---|---|---|---|
 | Caso (K/N) | 0.01 | 0.05 | 0.10 | 4834.5 (≈N/2) | 5.14 | 0.71 |
 | Baseline: proiezioni casuali non allenate | 0.01 ± 0.01 | 0.05 ± 0.02 | 0.10 ± 0.04 | 4773 ± 208 | 4.22 ± 1.53 | 0.81 ± 1.69 |
 | Ridge lineare (MPNet, λ=1000 scelto sul val) | 1.07 | 3.85 | 6.33 | 491 | 50.16 | 10.48 |
-| Contrastivo (MLP), loss `diag` | 2.90 ± 0.16 | 10.23 ± 0.23 | **15.97 ± 0.26** | **115 ± 2** | 70.52 ± 0.50 | 15.24 ± 0.83 |
-| **Contrastivo (MLP), loss `classe` (finale)** | 2.40 ± 0.11 | 8.76 ± 0.38 | 13.61 ± 0.50 | 140 ± 3 | **72.89 ± 1.38** | **16.51 ± 2.70** |
+| Contrastivo (MLP), loss `diag` | 2.94 ± 0.06 | 10.24 ± 0.47 | **15.95 ± 0.26** | **116 ± 3** | 70.56 ± 0.45 | 14.13 ± 0.96 |
+| **Contrastivo (MLP), loss `classe` (finale)** | 2.57 ± 0.08 | 9.14 ± 0.15 | 14.27 ± 0.27 | 138 ± 6 | **73.68 ± 0.40** | **14.76 ± 0.95** |
 
-Modello finale: MPNet, H=1024, d=128, dropout 0.3, lr 1e-4, batch 512, τ fissa, loss multi-positivo
+Modello finale: MPNet, H=1024, d=128, dropout 0.3, lr 1e-4, batch 256, τ fissa, loss multi-positivo
 `classe` (vedi `docs/roadmap_p6_test.md` e `experiments/final/manifest.json`). Trade-off rispetto a
-`diag`: +2.4 su classe R@10 (+3.6 su classe R@1), −2.4 su esatto R@10.
+`diag`: +3.1 su classe R@10 (+4.6 su classe R@1: 37.34 contro 32.77), −1.7 su esatto R@10. Sulle
+combinazioni nuove le due loss sono alla pari (differenza < 1 dev. std).
+
+Prima esecuzione di P6 (pipeline v1, senza DataLoader/Lightning, modello finale con batch 512):
+classe R@10 72.89 ± 1.38, esatto R@10 13.61 ± 0.50. Archiviata in `experiments/archivio_v1/final/`;
+le regole di scelta sono rimaste le stesse.
 
 Valori del subset a 4 partecipanti (ridge test: esatto R@10 16.06%, classe R@10 57.38%, in
 `experiments/logs/subset4p/`): **non confrontabili** con questi, perche' il numero di video
 candidati per query e' molto piu' piccolo.
 
 **Criterio di successo:** supera il ridge su R@10 esatto e R@10 classe, sul val (per la scelta) e sul test (una volta sola).
-**Esito (test): superato.** Esatto R@10 13.61 contro 6.33 del ridge, classe R@10 72.89 contro 50.16.
+**Esito (test): superato.** Esatto R@10 14.27 contro 6.33 del ridge, classe R@10 73.68 contro 50.16.
+Anche sul val: esatto R@10 13.80 contro 6.09, classe R@10 75.51 contro 52.89.
 
 Se non lo supera, il report resta valido ma il messaggio cambia: la loss contrastiva non aggiunge nulla rispetto a una proiezione lineare. Va dichiarato.
 
@@ -137,9 +150,17 @@ Se non lo supera, il report resta valido ma il messaggio cambia: la loss contras
 
 ## 3. Dati e split
 
-- Feature: `data/features/timesformer_k400_8f/timesformer_k400_8f.npz` (19.798 × 768); testo in `data/features/text/{mpnet,bert,clip}.npz`.
-- Split (`data/splits/split.csv`): train 14.772, val 2.778, test 2.248.
-- Il val è separato per sessioni (`split_info.json`), quindi non c'è leakage tra persone.
+- Dataset completo: 633 sessioni, 34 partecipanti. Feature video
+  `data/features/timesformer_k400_8f/timesformer_k400_8f.npz` (76.885 × 768, esattamente le
+  annotazioni di retrieval: 67.217 train + 9.668 test); testo in `data/features/text/{mpnet,bert}.npz`.
+  I video grezzi sono stati cancellati dopo l'estrazione.
+- Split (`data/splits/split.csv`, da `make_split.py`): train 56.430, val 10.787 (78 sessioni, 15%),
+  test 9.668 (il test ufficiale delle annotazioni).
+- Combinazioni verbo+nome assenti dal train: 399 clip nel val, 420 nel test. Verbi e nomi mai
+  visti sono quasi assenti (test: 2 clip con verbo nuovo, 24 con nome nuovo).
+- Il val è separato per sessioni (`split_info.json`), quindi non c'è leakage tra sessioni.
+- Studio pilota sul subset di 4 partecipanti (P22, P24, P27, P30; train 14.772, val 2.778,
+  test 2.248): archiviato in `data/splits/subset4p/` e nelle altre cartelle `subset4p`.
 - `load_pair(encoder, split)` allinea per `narration_id`.
 
 Regole:
@@ -245,6 +266,17 @@ Regole:
 - Il guadagno rispetto alla config di partenza di P3 (68.5, un solo seed) è circa +0.8: con questi dati gli iperparametri contano poco rispetto al salto dal ridge (circa +9).
 - File: `experiments/logs/p4_grid.csv`, `p4_seed.csv`; figure `p4_effetti_principali.png`, `p4_heatmap_*.png`, `p4_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
 
+**Esito (dataset completo, val, pipeline v2).** Griglia e seed rifatti da zero con le stesse
+regole (dettagli in `experiments/final/manifest.json`):
+- Griglia 48 config con loss `diag`, seed 1 e 2 sulle prime 5: vince di nuovo
+  **`d=128, dropout=0.3, lr=1e-4, batch=256, τ fissa`**, classe R@10 72.17 ± 0.56.
+- Ablation della loss sulla config scelta (anticipata da P8), 3 seed: `classe` 75.51 ± 0.62,
+  `diag` 72.17 ± 0.56, `frase` 72.07 ± 0.59 (equivalente a `diag`). Vince `classe`.
+- Mini-griglia con loss `classe`, batch {128, 256, 512} × τ {fissa, appresa}: b256 τ fissa ha la
+  media più alta (75.51 ± 0.62); b256 τ appresa, b512 τ appresa e b512 τ fissa sono alla pari, b128
+  no. Resta b256 τ fissa, anche la più semplice tra quelle alla pari.
+- Figure aggiornate sul dataset completo: `figures/p4_*.png`.
+
 ### P5 · Confronto encoder di testo
 **Obiettivo:** scegliere l'encoder di testo.
 
@@ -254,6 +286,22 @@ Regole:
 - Barre con deviazione standard sui seed, per encoder, con il ridge a confronto.
 
 **Criterio per passare:** encoder scelto con variabilità nota.
+
+**Esito (fatto dopo P6, quindi solo informativo).** Sul dataset completo è stato scelto MPNet
+senza griglia sugli encoder (CLIP non estratto). Il confronto con BERT è stato fatto dopo la
+valutazione sul test, a parità di config (quella scelta per MPNet, senza una griglia per BERT),
+con le loss `diag` e `classe` × 3 seed; verifica sul val prima del test
+(`experiments/final/check_val_bert.csv`). Il modello finale resta MPNet e il confronto va
+dichiarato come informativo.
+
+| Test, MLP `classe` | esatto R@10 | rango mediano | classe R@10 | nuove classe R@10 |
+|---|---|---|---|---|
+| MPNet | **14.27 ± 0.27** | **138 ± 6** | **73.68 ± 0.40** | **14.76 ± 0.95** |
+| BERT | 13.03 ± 0.09 | 153 ± 5 | 70.27 ± 0.61 | 9.76 ± 1.91 |
+
+MPNet è migliore su tutte le metriche e per tutti i modelli allenati (anche ridge e MLP `diag`).
+Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluation/encoder_compare.py`,
+`experiments/final/final_test_bert.csv`, `experiments/logs/encoder_compare.csv`.
 
 ### P6 · Valutazione finale sul test
 **Obiettivo:** il numero del report.
@@ -268,6 +316,14 @@ Regole:
 
 **Criterio per passare:** tabella finale del punto 2 compilata.
 
+**Esito: fatto** (piano completo e decisioni pre-registrate in `docs/roadmap_p6_test.md`). Script
+`src/evaluation/evaluate_test.py` (verifica sha256 dei checkpoint, prima `--split val`, poi
+`--split test` una volta) e `src/evaluation/p6_figures.py`. Output in `experiments/final/`
+(`final_test.csv`, `final_test_ranks.npz`, anche su wandb come run `test-finale`). Figure
+`p6_recall_k.png`, `p6_risultati.png`, `p6_zero_shot.png`, `p6_matrice_similarita.png`, spiegate in
+`figures/p6_figure_spiegate.md`. Eseguito due volte: pipeline v1 (archiviata in
+`experiments/archivio_v1/final/`) e pipeline v2 (quella in tabella al punto 2).
+
 ### P7 · Analisi qualitativa
 **Obiettivo:** capire perché il modello sbaglia.
 
@@ -280,11 +336,58 @@ Regole:
 
 **Criterio per passare:** analisi pronta per il report.
 
+**Esito: fatto** (sul test, modelli seed 0 come fissato in D4; figure solo descrittive, nessuna
+scelta ne segue).
+
+**t-SNE dello spazio appreso** (`src/evaluation/p7_tsne.py`, 2000 clip a caso, video e frasi in un
+solo fit, metrica coseno), con note di lettura nei `.md` accanto alle figure:
+- `figures/p7_tsne_spazio_appreso_test.png` (MLP `diag` e `classe`): nessun modality gap visibile,
+  video e frasi mescolati; wash ha una regione sua, take e put sono sparsi; lo spazio è organizzato
+  in piccoli gruppi per verbo+nome; a scala di verbo le due loss si somigliano.
+- `figures/p7_tsne_zero_shot_test.png` (MLP `classe` più le 420 clip con combinazione nuova): le
+  clip zero-shot hanno quasi tutte verbi poco frequenti (insert, mix, scoop), si concentrano in una
+  parte della mappa e spesso frasi e video stanno in gruppi separati, coerente con il 15.7% di
+  classe R@10 (seed 0).
+- `figures/p7_tsne_perplexity_test.png`: perplexity 15, 30, 50, controllo di robustezza.
+
+**Analisi per verbo, per frequenza ed errori** (`src/evaluation/p7_analysis.py`). Ridge contro MLP
+`classe`; in F3 anche MLP `diag`. Scelte (verbi, gruppi di frequenza) fissate solo dai metadati.
+- **F1** `figures/p7_recall_per_verbo.png`: classe R@10 per i 12 verbi più frequenti del test.
+  L'MLP batte il ridge su tutti e 12. I più deboli sono insert (41.9) e remove (39.9), gesti di
+  spostamento dove conta l'oggetto; i più forti hanno un contesto visivo riconoscibile: open
+  (91.4), turn-on (89.4), close (87.2), wash (86.4). Media su tutte le query: 74.0.
+- **F2** `figures/p7_recall_per_frequenza.png`: classe R@10 per numero di clip della classe
+  verbo+nome nel train. MLP: mai vista (420 query) 15.7, 1–10 (1165) 33.6, 11–100 (3033) 62.9,
+  oltre 100 (5050) 94.8; ridge 10.5 / 14.1 / 31.8 / 72.8. Il risultato dipende molto dalla
+  frequenza; il guadagno sul ridge è massimo sulle classi viste da 1 a 100 volte e minimo sulle
+  combinazioni mai viste (+5). Sostituisce le barre "seen vs unseen".
+- **F3** `figures/p7_tipi_di_errore.png`: il primo video recuperato rispetto alla frase. Classe
+  giusta: ridge 16.7%, `diag` 31.4%, `classe` 38.4% (= classe R@1). Verbo e nome entrambi
+  sbagliati: ridge 50.4%, `classe` 25.5%. Quando l'MLP sbaglia, sbaglia più spesso il verbo
+  (22.6%) che il nome (13.5%): gli oggetti si riconoscono meglio delle azioni.
+- **F4** `figures/p7_coppie_confuse.png`: le 10 confusioni più frequenti del modello finale
+  (classe della frase → classe del top-1). 7 su 10 sono azioni opposte sullo stesso oggetto
+  (turn-off tap → turn-on tap, 143 query su 154; take plate → put plate; put spoon → take spoon),
+  le altre oggetti simili (take fork → take spoon, take oil → take bottle). Risponde all'obiettivo
+  extra della traccia sulle coppie verbo/nome confuse. Si riferisce al solo top-1: per turn-off
+  la classe giusta resta spesso tra i primi 10 (R@10 86.7 in F1).
+
+Controllo: "classe giusta" al top-1 coincide query per query con il rango classe 1 di
+`final_test_ranks.npz` (0 differenze per i tre modelli).
+
+Non fatti, per scelta: matrice di confusione completa dei verbi (78 verbi, poco leggibile:
+sostituita da F3 e F4), distanza tra centroidi (il t-SNE non mostra modality gap), esempi
+qualitativi di retrieval (provati e scartati).
+
 ### P8 · Estensioni (opzionali)
-- Loss multi-positivo. Nella run di P3, nel 59% delle righe di un batch da 256 c'è un falso negativo (stesso verbo e nome) e nel 38% la stessa frase identica. Da provare come ablation sulla config di P4: positivi = stessa frase, oppure stesso verbo e nome.
+- Loss multi-positivo: **fatta**, ed entrata nella scelta del modello finale (vedi esito di P4 sul
+  dataset completo). Opzione `positives` di `train.py`: `diag` (InfoNCE classica), `frase` (positivi
+  = stessa frase), `classe` (positivi = stesso verbo e nome). Motivazione: nella run di P3, nel 59%
+  delle righe di un batch da 256 c'era un falso negativo (stesso verbo e nome) e nel 38% la stessa
+  frase identica.
 - Rumore o dropout sulle feature di input, come augmentation (ablation sulla config di P4).
 - Fine-tuning parziale di MPNet (ultimi layer). Richiede di rieseguire l'encoder sui token.
-- Fine-tuning video: richiede GPU e clip ritagliate dai video grezzi (`data/EPIC-KITCHENS`, 193 GB). Non è necessario per l'obiettivo minimo.
+- Fine-tuning video: richiede GPU e clip ritagliate dai video grezzi, che sono stati cancellati dopo l'estrazione delle feature (andrebbero riscaricati). Non è necessario per l'obiettivo minimo.
 
 ---
 
@@ -292,17 +395,26 @@ Regole:
 
 | Percorso | Contenuto |
 |---|---|
+| `src/utils/dataset.py` | `FeaturePairs` (Dataset) e DataLoader delle coppie video–testo |
 | `src/training/heads.py` | teste MLP |
-| `src/training/loss.py` | InfoNCE simmetrica |
-| `src/training/train.py` | ciclo di training |
+| `src/training/loss.py` | InfoNCE simmetrica, anche multi-positivo (`diag`, `frase`, `classe`) |
+| `src/training/task.py` | `RetrievalTask`, il `LightningModule` (teste + loss + AdamW, metriche val a fine epoca) |
+| `src/training/callbacks.py` | storico delle metriche per epoca e CSV di log |
+| `src/training/train.py` | `pl.Trainer` con early stopping, checkpoint e logger wandb |
 | `src/training/grid.py` | lancio della griglia di P4 e dei seed |
 | `src/evaluation/p4_grid.py` | tabella, effetti principali, heatmap e seed di P4, con la scelta della config |
+| `src/evaluation/evaluate_test.py` | valutazione finale (P6), `--split val` per la verifica, `--encoder` per BERT |
+| `src/evaluation/p6_figures.py` | figure di P6 |
+| `src/evaluation/encoder_compare.py` | confronto MPNet–BERT sul test (P5) |
+| `src/evaluation/p7_tsne.py` | t-SNE dello spazio appreso (P7) |
+| `experiments/final/` | checkpoint scelti, `manifest.json` (scelta e sha256), risultati di P6 (su git, tranne i checkpoint) |
+| `experiments/archivio_v1/` | checkpoint, log e risultati del test della pipeline v1 |
 | `*/subset4p/`, `figures/figures4p/` | archivio dello studio pilota sul subset di 4 partecipanti (split, feature testo, log, checkpoint, figure) |
-| `src/evaluation/analysis.py` | grafici e metriche per verbo, fallimenti, centroidi |
-| `experiments/configs/*.yaml` | una config per run |
+| `src/evaluation/p7_analysis.py` | R@10 per verbo e per frequenza, tipi di errore e coppie confuse del top-1 (P7) |
+| `experiments/configs/*.yaml` | non usato: la config di ogni run sta nel suo nome, nel checkpoint e su wandb |
 | `experiments/checkpoints/` | pesi migliori (fuori da git) |
-| `experiments/logs/` | un CSV per run, più `final_test.csv` |
-| `figures/` | grafici, con nome che indica config e seed |
+| `experiments/logs/` | un CSV per run, più i CSV di riepilogo (P4, ridge, baseline, encoder) |
+| `figures/` | grafici, con nome che indica fase, config e seed; note di lettura nei `.md` |
 
 ---
 
@@ -312,8 +424,9 @@ Regole:
 - [x] P1 ridge calcolato anche sul test
 - [x] P2 test di overfit superato
 - [x] P3 prima run completa su MPNet
-- [x] P4 config scelta sul val (subset; da rifare sul dataset completo)
-- [ ] P5 encoder di testo scelto con 3 seed
-- [x] P6 valutazione finale sul test, una sola volta (`docs/roadmap_p6_test.md`)
-- [ ] P7 analisi qualitativa e grafici
-- [ ] Tabella finale nel report (`docs/REPORT.md`)
+- [x] P4 config scelta sul val (subset, poi rifatta sul dataset completo con ablation della loss e mini-griglia)
+- [x] P5 confronto encoder con 3 seed (MPNet contro BERT, fatto dopo P6: solo informativo)
+- [x] P6 valutazione finale sul test, una sola volta per pipeline (`docs/roadmap_p6_test.md`)
+- [x] P7 analisi qualitativa e grafici (t-SNE, R@10 per verbo e per frequenza, tipi di errore, coppie confuse)
+- [x] P8 loss multi-positivo
+- [ ] Tabella finale e figure nella relazione
