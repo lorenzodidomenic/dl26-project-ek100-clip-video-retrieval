@@ -200,7 +200,7 @@ Regole:
 ### P2 · Modello, loss e test di correttezza
 **Obiettivo:** codice corretto prima di qualsiasi training vero.
 
-- `src/training/heads.py`: le teste.
+- `src/models/heads.py`: le teste.
 - `src/training/loss.py`: InfoNCE simmetrica.
 - Funzione di metriche che riusa `retrieval_metrics`.
 - **Test di overfit** su 256 coppie di train: la loss deve andare quasi a zero e R@1 sul sottoinsieme ~100%. Se no, c'è un bug (quasi sempre allineamento o diagonale).
@@ -558,7 +558,7 @@ con più clip si abbassano.
 | Percorso | Contenuto |
 |---|---|
 | `src/utils/dataset.py` | `FeaturePairs` (Dataset) e DataLoader delle coppie video–testo |
-| `src/training/heads.py` | teste MLP |
+| `src/models/heads.py` | teste MLP |
 | `src/training/loss.py` | InfoNCE simmetrica, anche multi-positivo (`diag`, `frase`, `classe`) |
 | `src/training/task.py` | `RetrievalTask`, il `LightningModule` (teste + loss + AdamW, metriche val a fine epoca) |
 | `src/training/callbacks.py` | storico delle metriche per epoca e CSV di log |

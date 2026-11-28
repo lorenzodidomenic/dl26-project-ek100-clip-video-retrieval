@@ -2,7 +2,6 @@
 
 Training loops, custom loss functions, and optimizers.
 
-- `heads.py`: le due teste di proiezione (MLP + L2-norm) per video e testo.
 - `loss.py`: InfoNCE simmetrica con temperatura apprendibile, anche multi-positivo.
 - `task.py`: `RetrievalTask`, il `LightningModule` (teste + loss + AdamW). Le metriche di
   retrieval sul val si calcolano a fine epoca sull'intero val, dagli embedding accumulati.
