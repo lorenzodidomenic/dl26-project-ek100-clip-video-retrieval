@@ -253,7 +253,7 @@ def plot_confusions(confusions, out):
     fig, ax = plt.subplots(figsize=(11, 6.2), constrained_layout=True)
     y = np.arange(len(confusions))[::-1]                    # la piu' frequente in alto
     top = max(c[2] for c in confusions)
-    for yi, (query, found, count, size, kind) in zip(y, confusions):
+    for yi, (_, _, count, size, kind) in zip(y, confusions):
         ax.barh(yi, count, 0.65, color=ERROR_TYPES[kind][1], zorder=2)
         ax.text(count + top * 0.01, yi, f"{count} su {size} query della classe "
                 f"({count / size:.0%})", va="center", fontsize=8.5, color=INK)

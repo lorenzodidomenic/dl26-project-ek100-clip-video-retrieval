@@ -34,8 +34,7 @@ from torch.utils.data import DataLoader, Subset
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-
-
+# pylint: disable=wrong-import-position
 from evaluation.linear_alignment import CRITERION, OUT as RIDGE_LOG  # noqa: E402
 from evaluation.linear_alignment import unseen_mask  # noqa: E402
 from training.callbacks import MetricHistoryCallback  # noqa: E402
@@ -74,8 +73,11 @@ def make_data(encoder, positives, batch, seed):
 
 def ridge_reference(encoder):
     """Legge il CSV della baseline lineare (ridge regression testo→video).
-      Prende la riga migliore per lo stesso encoder, quella con il valore di classe_R@10 più alto.
-      Serve solo a stampare alla fine un confronto: "la MLP batte la baseline lineare?". Se il file non esiste restituisce None."""
+
+    Prende la riga migliore per lo stesso encoder, quella con il valore di classe_R@10 più alto.
+    Serve solo a stampare alla fine un confronto: "la MLP batte la baseline lineare?".
+    Se il file non esiste restituisce None.
+    """
     if not RIDGE_LOG.exists():
         return None
     with open(RIDGE_LOG, newline="", encoding="utf-8") as f:

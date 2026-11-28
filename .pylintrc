@@ -1,0 +1,29 @@
+# Configurazione pylint del progetto (usata anche dalla CI in .github/workflows/pylint.yml)
+
+[MAIN]
+# Il progetto gira su Python 3.10 (vedi environment.yml)
+py-version=3.10
+
+[MESSAGES CONTROL]
+disable=
+    # La CI installa solo pylint/numpy/pillow: torch, pytorch_lightning, wandb,
+    # matplotlib e sklearn non sono presenti, quindi ogni loro import sarebbe un errore.
+    import-error,
+    # Le teste di proiezione (nn.Module) espongono solo forward(): falso positivo.
+    too-few-public-methods,
+
+[TYPECHECK]
+# torch genera molti membri a runtime (es. torch.float32, torch.no_grad):
+# evita falsi "no-member" se torch viene installato in CI in futuro.
+generated-members=torch.*,numpy.*
+
+[FORMAT]
+max-line-length=120
+
+[DESIGN]
+# Gli script di training/valutazione hanno naturalmente molte variabili locali
+# (iperparametri, metriche, path) e funzioni con diversi argomenti.
+max-locals=30
+max-args=8
+max-positional-arguments=8
+max-statements=60

@@ -224,8 +224,8 @@ def main():
     group_of = np.array([g for g, *_ in items])
     swap_of = np.array([s for _, s, *_ in items])
     groups = [(g, group_of == g) for g in GROUPS]
-    groups += [(s, swap_of == s) for g in GROUPS for s in
-               (f"{w} → {syn}" for w, syn in GROUPS[g].items())]
+    swaps = [f"{w} → {syn}" for pairs in GROUPS.values() for w, syn in pairs.items()]
+    groups += [(s, swap_of == s) for s in swaps]
     for name, mask in groups:
         print(f"  {name:<20} {int(mask.sum()):5d} voci")
 

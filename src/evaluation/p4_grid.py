@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 # pylint: disable=wrong-import-position
 from evaluation.plot_training import GRID as GRID_LINE, INK, INK_MUTED, TRAIN as BLUE  # noqa: E402
-from evaluation.plot_training import plt  # noqa: E402
+from evaluation.plot_training import clean_axes, plt  # noqa: E402
 from training import grid  # noqa: E402
 from training.train import CRITERION, ridge_reference  # noqa: E402
 from utils.features import write_csv  # noqa: E402
@@ -100,13 +100,7 @@ def label(key, value):
 def style(ax, title):
     """Assi discreti e griglia orizzontale leggera, come in plot_training.py."""
     ax.set_title(title, loc="left", fontsize=11, color=INK)
-    ax.grid(axis="y", color=GRID_LINE, linewidth=0.8)
-    ax.set_axisbelow(True)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(GRID_LINE)
-    ax.tick_params(colors=INK_MUTED, labelsize=9)
+    clean_axes(ax)
 
 
 def plot_main_effects(rows, ridge, out):
@@ -176,10 +170,10 @@ def plot_heatmap(rows, row_key, col_key, out):
     ax.tick_params(colors=INK_MUTED, labelsize=9, length=0)
     for spine in ax.spines.values():
         spine.set_visible(False)
-    bar = fig.colorbar(image, ax=ax, shrink=0.9)
-    bar.set_label("R@10 classe medio (%)", color=INK_MUTED, fontsize=9)
-    bar.ax.tick_params(colors=INK_MUTED, labelsize=8)
-    bar.outline.set_visible(False)
+    cbar = fig.colorbar(image, ax=ax, shrink=0.9)
+    cbar.set_label("R@10 classe medio (%)", color=INK_MUTED, fontsize=9)
+    cbar.ax.tick_params(colors=INK_MUTED, labelsize=8)
+    cbar.outline.set_visible(False)
     ax.set_title(f"{FACTORS[row_key]} × {FACTORS[col_key]}: R@10 classe sul val",
                  loc="left", fontsize=11, color=INK)
     fig.savefig(out, dpi=150, facecolor="white")

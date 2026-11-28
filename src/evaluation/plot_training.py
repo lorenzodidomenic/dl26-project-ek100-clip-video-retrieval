@@ -45,18 +45,26 @@ def ridge_reference(encoder):
     return max(rows, key=lambda r: float(r[CRITERION])) if rows else None
 
 
-def style(ax, title, ylabel):
-    """Assi e griglia discreti, titolo e etichette in inchiostro neutro."""
-    ax.set_title(title, loc="left", fontsize=11, color=INK)
-    ax.set_xlabel("epoca", color=INK_MUTED)
-    ax.set_ylabel(ylabel, color=INK_MUTED)
-    ax.grid(axis="y", color=GRID, linewidth=0.8)
+def clean_axes(ax, grid_axis="y"):
+    """Griglia leggera, bordi alto e destro nascosti, tick in inchiostro neutro.
+
+    Stile comune a tutte le figure del progetto (anche p4_grid.py e p6_figures.py).
+    """
+    ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
         ax.spines[side].set_color(GRID)
     ax.tick_params(colors=INK_MUTED, labelsize=9)
+
+
+def style(ax, title, ylabel):
+    """Assi e griglia discreti, titolo e etichette in inchiostro neutro."""
+    ax.set_title(title, loc="left", fontsize=11, color=INK)
+    ax.set_xlabel("epoca", color=INK_MUTED)
+    ax.set_ylabel(ylabel, color=INK_MUTED)
+    clean_axes(ax)
 
 
 def line(ax, epochs, values, color, label):

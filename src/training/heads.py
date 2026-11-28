@@ -5,7 +5,6 @@ t -> Linear(D_t, H) -> GELU -> Dropout(p) -> Linear(H, d) -> L2-norm -> z_t
 
 L2-norm: ogni vettore sta sulla sfera unitaria, quindi il prodotto scalare e' il coseno.
 """
-import torch
 from torch import nn
 import torch.nn.functional as F
 
@@ -38,4 +37,3 @@ class DualHead(nn.Module):
     def forward(self, video, text):
         """Ritorna (z_v, z_t), entrambi (n, out_dim) e normalizzati."""
         return self.video(video), self.text(text)
-
