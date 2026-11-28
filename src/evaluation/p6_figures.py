@@ -45,8 +45,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 # pylint: disable=wrong-import-position
 from evaluation.evaluate_test import (  # noqa: E402
-    ENCODER, OUT as RESULTS, OUT_RANKS, load_manifest, mlp_sim)
-from evaluation.plot_training import GRID, INK, INK_MUTED, plt  # noqa: E402
+    ENCODER, OUT as RESULTS, OUT_RANKS, by_model, load_manifest, mlp_sim)
+from evaluation.plot_training import GRID, INK, INK_MUTED, clean_axes, plt  # noqa: E402
 from utils.features import load_pair  # noqa: E402
 
 FIG_DIR = ROOT / "figures"
@@ -77,13 +77,7 @@ def style(ax, title, xlabel, ylabel, grid_axis="both"):
     ax.set_title(title, loc="left", fontsize=11, color=INK)
     ax.set_xlabel(xlabel, color=INK_MUTED)
     ax.set_ylabel(ylabel, color=INK_MUTED)
-    ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
-    ax.set_axisbelow(True)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(GRID)
-    ax.tick_params(colors=INK_MUTED, labelsize=9)
+    clean_axes(ax, grid_axis)
 
 
 def recall_curve(ranks):
@@ -135,14 +129,7 @@ def read_results(path):
         return {k: float(v) for k, v in row.items()
                 if k not in ("modello", "seed", "dettagli") and v != ""}
 
-    out = {}
-    for _, model, *_ in MODELS:
-        mine = {r["seed"]: r for r in rows if r["modello"] == model}
-        if "media" in mine:
-            out[model] = (numbers(mine["media"]), numbers(mine["std"]))
-        else:
-            out[model] = (numbers(next(iter(mine.values()))), None)
-    return out
+    return by_model(rows, [model for _, model, *_ in MODELS], numbers)
 
 
 def bar_panel(ax, results, groups, pad):

@@ -33,7 +33,7 @@ class RetrievalTask(pl.LightningModule):  # pylint: disable=too-many-ancestors
 
     # lr e weight_decay non si usano qui: save_hyperparameters li salva in self.hparams,
     # e configure_optimizers li legge da li'
-    # pylint: disable-next=too-many-arguments,too-many-locals
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments,too-many-locals
     def __init__(self, video_dim, text_dim, hidden=1024, dim=256, dropout=0.1,
                  lr=1e-3, weight_decay=1e-2,  # pylint: disable=unused-argument
                  fixed_tau=False, stats=None, val_meta=None, val_unseen=None):

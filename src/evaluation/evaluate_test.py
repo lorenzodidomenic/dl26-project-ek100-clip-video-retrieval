@@ -228,6 +228,22 @@ def aggregate(rows, model):
     return [mean, std]
 
 
+def by_model(rows, models, numbers):
+    """{modello: (valori, dev. std o None)} dalle righe di un CSV scritto da questo script.
+
+    Modelli con piu' seed: righe "media" e "std" (vedi aggregate); gli altri: la loro unica riga.
+    numbers(riga) -> {metrica: valore} sceglie e converte le colonne.
+    """
+    out = {}
+    for model in models:
+        mine = {r["seed"]: r for r in rows if r["modello"] == model}
+        if "media" in mine:
+            out[model] = (numbers(mine["media"]), numbers(mine["std"]))
+        else:
+            out[model] = (numbers(next(iter(mine.values()))), None)
+    return out
+
+
 def evaluate_all(split, encoder=ENCODER):
     """Ranghi e metriche di tutti i modelli di D1 sullo split indicato, per un encoder."""
     models = load_models(encoder)

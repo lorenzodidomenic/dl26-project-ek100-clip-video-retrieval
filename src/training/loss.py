@@ -36,8 +36,9 @@ def info_nce(z_v, z_t, tau, labels=None):
         # P e' simmetrica, quindi lo stesso target vale per testo->video e video->testo
         pos = (labels[:, None] == labels[None, :]).float()
         target = pos / pos.sum(1, keepdim=True)     # ogni riga somma a 1: uniforme sui positivi
-    loss_t2v = F.cross_entropy(sim, target)         # per ogni testo, trova il suo video (la ground trouth è nella digonale)
-    loss_v2t = F.cross_entropy(sim.T, target)       # per ogni video, trova il suo testo (la ground truth è nella diagonale)
+    # senza labels la ground truth e' la diagonale: la coppia i-esima del batch
+    loss_t2v = F.cross_entropy(sim, target)         # per ogni testo, trova il suo video
+    loss_v2t = F.cross_entropy(sim.T, target)       # per ogni video, trova il suo testo
     return 0.5 * (loss_t2v + loss_v2t)  # media tra le due loss
 
 

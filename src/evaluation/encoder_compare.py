@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 # pylint: disable=wrong-import-position
-from evaluation.evaluate_test import outputs  # noqa: E402
+from evaluation.evaluate_test import by_model, outputs  # noqa: E402
 from utils.features import write_csv  # noqa: E402
 
 ENCODERS = ("mpnet", "bert")
@@ -50,14 +50,7 @@ def read_results(encoder):
     def numbers(row):
         return {m: float(row[m]) for m in METRICS}
 
-    out = {}
-    for model in MODELS:
-        mine = {r["seed"]: r for r in rows if r["modello"] == model}
-        if "media" in mine:
-            out[model] = (numbers(mine["media"]), numbers(mine["std"]))
-        else:
-            out[model] = (numbers(next(iter(mine.values()))), None)
-    return out
+    return by_model(rows, MODELS, numbers)
 
 
 def verdict(metric, a, b):
