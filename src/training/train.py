@@ -149,7 +149,7 @@ def main():  # pylint: disable=too-many-locals
 
     monitor = f"val/{CRITERION}"
     # min_delta 0 e confronto stretto: migliora solo un valore strettamente maggiore,
-    # quindi l'epoca salvata e' la prima con il massimo (come assume anche p4_grid.py)
+    # quindi l'epoca salvata e' la prima con il massimo (come assume anche grid_results.py)
     early_stop = EarlyStopping(monitor=monitor, mode="max", patience=args.patience)
     checkpoint = ModelCheckpoint(dirpath=CKPT_DIR, filename=args.name, monitor=monitor,
                                  mode="max", save_top_k=1, save_weights_only=True,

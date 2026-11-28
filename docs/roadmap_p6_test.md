@@ -154,7 +154,7 @@ Domande a cui rispondere, nell'ordine:
 **Annotare:** una frase di risposta per ogni domanda. Diventano il testo della relazione.
 
 ### Passo 6 · Figure
-Script `src/evaluation/p6_figures.py`. Usa il seed 0 delle MLP (D4) e il seed 42 della baseline
+Script `src/evaluation/final_figures.py`. Usa il seed 0 delle MLP (D4) e il seed 42 della baseline
 (il primo dei suoi 10), fissati prima di disegnare.
 - `figures/p6_recall_k.png`: curva R@K al variare di K, da 1 a N (asse x logaritmico), pannelli
   esatto e classe: baseline casuale ("prima del training"), ridge, MLP `diag`, MLP `classe`

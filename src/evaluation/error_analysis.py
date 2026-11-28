@@ -2,7 +2,7 @@
 
 Modelli: ridge lineare (λ=1000, riferimento) e MLP con loss classe (modello finale); in F3 anche
 MLP con loss diag. MLP seed 0 come fissato in D4 di docs/roadmap_p6_test.md. Stessi colori di
-p6_figures.py.
+final_figures.py.
 
 Scelte fissate prima di guardare i risultati (dipendono solo dai metadati):
 1. figures/p7_recall_per_verbo.png: classe R@10 (% di query con almeno un video della stessa
@@ -26,7 +26,7 @@ Scelte fissate prima di guardare i risultati (dipendono solo dai metadati):
    F3 e F4 ricalcolano le similarita' dai checkpoint (mlp_sim e ridge_sim di evaluate_test.py).
    Il top-1 e' l'argmax della riga; a parita' di similarita' vince l'indice piu' basso.
 
-Uso: python src/evaluation/p7_analysis.py
+Uso: python src/evaluation/error_analysis.py
 """
 import csv
 import sys
@@ -41,8 +41,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from evaluation.evaluate_test import (  # noqa: E402
     ENCODER, OUT_RANKS, load_manifest, mlp_sim, ridge_sim)
 from evaluation.linear_alignment import best_val_lambdas  # noqa: E402
-from evaluation.p6_figures import style  # noqa: E402
-from evaluation.p7_tsne import top_verbs, verb_names  # noqa: E402
+from evaluation.final_figures import style  # noqa: E402
+from evaluation.plot_tsne import top_verbs, verb_names  # noqa: E402
 from evaluation.plot_training import INK, INK_MUTED, plt  # noqa: E402
 from utils.features import load_pair, load_split  # noqa: E402
 
@@ -54,7 +54,7 @@ N_VERBS = 12                    # verbi del test con almeno ~200 query
 N_CONFUSIONS = 10
 # (etichetta, minimo, massimo incluso; None = senza limite): clip della classe nel train
 FREQ_BINS = [("mai vista", 0, 0), ("rara", 1, 10), ("media", 11, 100), ("frequente", 101, None)]
-MODELS = [  # (chiave nel file dei ranghi, etichetta, colore): come in p6_figures.py
+MODELS = [  # (chiave nel file dei ranghi, etichetta, colore): come in final_figures.py
     ("ridge", "ridge lineare (λ=1000)", "#1baf7a"),
     (f"mlp_classe_s{MLP_SEED}", "MLP, loss classe (finale)", "#2a78d6"),
 ]

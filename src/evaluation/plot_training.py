@@ -48,7 +48,7 @@ def ridge_reference(encoder):
 def clean_axes(ax, grid_axis="y"):
     """Griglia leggera, bordi alto e destro nascosti, tick in inchiostro neutro.
 
-    Stile comune a tutte le figure del progetto (anche p4_grid.py e p6_figures.py).
+    Stile comune a tutte le figure del progetto (anche grid_results.py e final_figures.py).
     """
     ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)

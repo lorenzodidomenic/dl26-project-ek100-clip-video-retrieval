@@ -234,7 +234,7 @@ Regole:
 - La run di P3 è una delle 48 celle e viene riusata: le run nuove sono 47.
 - **Device CPU**: con un modello così piccolo MPS guadagna al massimo circa il 25%, e su MPS lo stesso seed non garantisce lo stesso risultato. Costo misurato: circa 2.5–3.5 s per epoca, quindi circa 1–2 h per la griglia.
 - **Seed sulle prime 5**: dopo la griglia, le prime 5 config si rilanciano con seed 1 e 2 (10 run). Si sceglie sulla media dei 3 seed, perché il massimo di 48 misure rumorose (±3 punti tra epoche) è ottimista.
-- **Regola di scelta**, fissata prima di vedere i risultati: vince la media più alta; se due config distano meno di una deviazione standard (la maggiore delle due), vince la più semplice (d più piccolo, poi dropout più alto, poi la media). Applicata in automatico da `p4_grid.py` quando tutti i seed sono finiti.
+- **Regola di scelta**, fissata prima di vedere i risultati: vince la media più alta; se due config distano meno di una deviazione standard (la maggiore delle due), vince la più semplice (d più piccolo, poi dropout più alto, poi la media). Applicata in automatico da `grid_results.py` quando tutti i seed sono finiti.
 - Criterio: R@10 classe sul val, come in `linear_alignment`. Non usare il test.
 - Restano fuori da P4 la loss multi-positivo e il rumore sull'input: diventano ablation sulla config scelta (vedi P8).
 
@@ -242,7 +242,7 @@ Regole:
 1. `train.py`: estrarre il nome della run in una funzione `run_name(args)`, condivisa con lo script della griglia.
 2. `src/training/grid.py`: genera le 48 config e lancia `train.py` in un processo separato per ciascuna. Una run conta come fatta se il suo log mostra un training finito (early stopping o ultima epoca) e il checkpoint esiste; si può interrompere e rilanciare. Opzioni `--dry-run`, `--seeds` e `--only`.
 3. Esecuzione: `caffeinate -i python src/training/grid.py`.
-4. `src/evaluation/p4_grid.py`: run e iperparametri presi dalla definizione della griglia in `grid.py` (solo le run finite), epoca migliore dal log con la regola di `train.py`; tabella e grafici. Si può lanciare anche con la griglia in corso.
+4. `src/evaluation/grid_results.py`: run e iperparametri presi dalla definizione della griglia in `grid.py` (solo le run finite), epoca migliore dal log con la regola di `train.py`; tabella e grafici. Si può lanciare anche con la griglia in corso.
 5. Seed 1 e 2 sulle prime 5, tabella con media ± deviazione standard.
 6. Chiusura: config scelta documentata qui e nel report.
 
@@ -318,7 +318,7 @@ Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluat
 
 **Esito: fatto** (piano completo e decisioni pre-registrate in `docs/roadmap_p6_test.md`). Script
 `src/evaluation/evaluate_test.py` (verifica sha256 dei checkpoint, prima `--split val`, poi
-`--split test` una volta) e `src/evaluation/p6_figures.py`. Output in `experiments/final/`
+`--split test` una volta) e `src/evaluation/final_figures.py`. Output in `experiments/final/`
 (`final_test.csv`, `final_test_ranks.npz`, anche su wandb come run `test-finale`). Figure
 `p6_recall_k.png`, `p6_risultati.png`, `p6_zero_shot.png`, `p6_matrice_similarita.png`, spiegate in
 `figures/p6_figure_spiegate.md`. Eseguito due volte: pipeline v1 (archiviata in
@@ -339,7 +339,7 @@ Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluat
 **Esito: fatto** (sul test, modelli seed 0 come fissato in D4; figure solo descrittive, nessuna
 scelta ne segue).
 
-**t-SNE dello spazio appreso** (`src/evaluation/p7_tsne.py`, 2000 clip a caso, video e frasi in un
+**t-SNE dello spazio appreso** (`src/evaluation/plot_tsne.py`, 2000 clip a caso, video e frasi in un
 solo fit, metrica coseno), con note di lettura nei `.md` accanto alle figure:
 - `figures/p7_tsne_spazio_appreso_test.png` (MLP `diag` e `classe`): nessun modality gap visibile,
   video e frasi mescolati; wash ha una regione sua, take e put sono sparsi; lo spazio è organizzato
@@ -350,7 +350,7 @@ solo fit, metrica coseno), con note di lettura nei `.md` accanto alle figure:
   classe R@10 (seed 0).
 - `figures/p7_tsne_perplexity_test.png`: perplexity 15, 30, 50, controllo di robustezza.
 
-**Analisi per verbo, per frequenza ed errori** (`src/evaluation/p7_analysis.py`). Ridge contro MLP
+**Analisi per verbo, per frequenza ed errori** (`src/evaluation/error_analysis.py`). Ridge contro MLP
 `classe`; in F3 anche MLP `diag`. Scelte (verbi, gruppi di frequenza) fissate solo dai metadati.
 - **F1** `figures/p7_recall_per_verbo.png`: classe R@10 per i 12 verbi più frequenti del test.
   L'MLP batte il ridge su tutti e 12. I più deboli sono insert (41.9) e remove (39.9), gesti di
@@ -564,15 +564,15 @@ con più clip si abbassano.
 | `src/training/callbacks.py` | storico delle metriche per epoca e CSV di log |
 | `src/training/train.py` | `pl.Trainer` con early stopping, checkpoint e logger wandb |
 | `src/training/grid.py` | lancio della griglia di P4 e dei seed |
-| `src/evaluation/p4_grid.py` | tabella, effetti principali, heatmap e seed di P4, con la scelta della config |
+| `src/evaluation/grid_results.py` | tabella, effetti principali, heatmap e seed di P4, con la scelta della config |
 | `src/evaluation/evaluate_test.py` | valutazione finale (P6), `--split val` per la verifica, `--encoder` per BERT |
-| `src/evaluation/p6_figures.py` | figure di P6 |
+| `src/evaluation/final_figures.py` | figure di P6 |
 | `src/evaluation/encoder_compare.py` | confronto MPNet–BERT sul test (P5) |
-| `src/evaluation/p7_tsne.py` | t-SNE dello spazio appreso (P7) |
+| `src/evaluation/plot_tsne.py` | t-SNE dello spazio appreso (P7) |
 | `experiments/final/` | checkpoint scelti, `manifest.json` (scelta e sha256), risultati di P6 (su git, tranne i checkpoint) |
 | `experiments/archivio_v1/` | checkpoint, log e risultati del test della pipeline v1 |
 | `*/subset4p/`, `figures/figures4p/` | archivio dello studio pilota sul subset di 4 partecipanti (split, feature testo, log, checkpoint, figure) |
-| `src/evaluation/p7_analysis.py` | R@10 per verbo e per frequenza, tipi di errore e coppie confuse del top-1 (P7) |
+| `src/evaluation/error_analysis.py` | R@10 per verbo e per frequenza, tipi di errore e coppie confuse del top-1 (P7) |
 | `src/evaluation/zero_shot_sinonimi.py` | zero-shot sulle parole: frasi del test con sinonimi mai visti in training |
 | `src/evaluation/demo_clip_esterne.py` | demo su clip esterne (Pexels): figura frasi × clip e `--query` per frasi libere |
 | `experiments/demo/clips.csv` | clip della demo: frase, taglio, file originale, link e licenza (i video stanno in `data/demo/clips/`) |

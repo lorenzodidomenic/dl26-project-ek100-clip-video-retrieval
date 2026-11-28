@@ -32,7 +32,7 @@ baseline casuale ("prima del training"), ridge, MLP diag, MLP classe ("dopo").
    distinguerebbe dal blocco per costruzione). Le similarita' si ricalcolano dai checkpoint con
    mlp_sim di evaluate_test.py.
 
-Uso: python src/evaluation/p6_figures.py
+Uso: python src/evaluation/final_figures.py
 """
 import csv
 import sys

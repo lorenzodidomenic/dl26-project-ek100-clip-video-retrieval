@@ -29,7 +29,7 @@ Scelte, fissate prima di guardare le figure:
 3. figures/p7_tsne_perplexity_<split>.png: MLP classe con perplexity 15, 30, 50 sulle stesse clip
    della figura 1. Se i gruppi restano al variare della perplexity la struttura e' reale.
 
-Uso: python src/evaluation/p7_tsne.py [--split test]
+Uso: python src/evaluation/plot_tsne.py [--split test]
 """
 import argparse
 import csv
@@ -57,7 +57,7 @@ SAMPLE_SEED, N_CLIPS = 0, 2000  # clip a caso dello split
 TSNE_SEED, PERPLEXITY = 0, 30
 PERPLEXITIES = (15, 30, 50)     # figura 3
 N_VERBS = 3
-# slot 1-3 della palette di riferimento (gli stessi colori di p6_figures.py), validati a coppie
+# slot 1-3 della palette di riferimento (gli stessi colori di final_figures.py), validati a coppie
 VERB_COLORS = ("#2a78d6", "#eb6834", "#1baf7a")
 OTHER = "#c9c8c4"               # altri verbi
 MARKERS = {"video": "o", "frase": "^"}
