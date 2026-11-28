@@ -1,0 +1,13 @@
+# Griglia di iperparametri della Fase P4 (loss diag, seed 0): 2 x 2 x 2 x 3 x 2 = 48 config.
+# La legge src/training/grid.py, che lancia train.py una volta per combinazione.
+#
+# Ogni chiave e' un'opzione di train.py (trattino -> underscore) con la lista dei valori da
+# provare; le opzioni che non compaiono restano ai default di train.py (MPNet, H=1024,
+# weight decay 1e-2, patience 10, CPU). L'ordine delle chiavi decide l'ordine delle run.
+# Cambiare la griglia cambia i nomi delle run: quelle gia' fatte si riconoscono dal nome.
+
+lr: [1.0e-4, 1.0e-3]        # scritti con il punto: PyYAML legge 1e-4 come stringa
+dropout: [0.1, 0.3]
+fixed_tau: [true, false]    # tau fissa a 0.07 oppure appresa
+batch: [128, 256, 512]
+dim: [128, 256]             # d, dimensione dello spazio comune
