@@ -1,6 +1,6 @@
 # Ripasso: P7 · t-SNE dello spazio appreso (test)
 
-![t-SNE dello spazio appreso](p7_tsne_spazio_appreso_test.png)
+![t-SNE dello spazio appreso](tsne_spazio_appreso_test.png)
 
 ## Cos'è t-SNE, in breve
 Gli embedding del modello hanno 128 dimensioni. t-SNE li porta in 2D cercando di fare in modo
@@ -49,7 +49,7 @@ vicini più prossimi della frase.
 4. **`diag` e `classe` a questa scala si somigliano.** Ci si aspettava gruppi per classe più
    netti con `classe`. Se la differenza c'è, sta al livello verbo+nome, che il colore per verbo
    non mostra. Il trade-off tra le due loss (esatto più alto con `diag`, classe più alto con
-   `classe`) si vede meglio in `p6_matrice_similarita.png`.
+   `classe`) si vede meglio in `test_matrice_similarita.png`.
 
 ## Trappole
 - **Le coordinate dei due pannelli non sono confrontabili.** Sono due fit diversi. Che wash sia

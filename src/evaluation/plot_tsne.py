@@ -16,17 +16,17 @@ Scelte, fissate prima di guardare le figure:
   grigio: in uno scatter solo i primi 3 colori della palette restano distinguibili a coppie,
   anche con daltonismo. Marker: cerchio = video, triangolo = frase.
 
-1. figures/p7_tsne_spazio_appreso_<split>.png: due pannelli, MLP diag e MLP classe. Con diag ci si
+1. figures/tsne_spazio_appreso_<split>.png: due pannelli, MLP diag e MLP classe. Con diag ci si
    aspetta ogni frase vicina al suo video ma classi meno compatte; con classe gruppi per classe
    piu' netti. Se video e frasi formano due isole separate e' il modality gap.
 
-2. figures/p7_tsne_zero_shot_<split>.png: MLP classe, fit su clip a caso piu' tutte le clip con
+2. figures/tsne_zero_shot_<split>.png: MLP classe, fit su clip a caso piu' tutte le clip con
    combinazione verbo+nome assente dal train (D3), evidenziate con bordo scuro; le altre fanno da
    contesto, sbiadite. Domanda: le combinazioni nuove cadono tra i video dello stesso verbo?
    Fit a parte: aggiungere le clip zero-shot al campione della figura 1 ne altererebbe la
    composizione.
 
-3. figures/p7_tsne_perplexity_<split>.png: MLP classe con perplexity 15, 30, 50 sulle stesse clip
+3. figures/tsne_perplexity_<split>.png: MLP classe con perplexity 15, 30, 50 sulle stesse clip
    della figura 1. Se i gruppi restano al variare della perplexity la struttura e' reale.
 
 Uso: python src/evaluation/plot_tsne.py [--split test]
@@ -222,7 +222,7 @@ def main():
               for p in ("diag", "classe")}
     plot_models(coords, verbs[idx], top, names,
                 f"{what}, {len(idx)} clip a caso, perplexity {PERPLEXITY}. {note}",
-                FIG_DIR / f"p7_tsne_spazio_appreso_{split}.png")
+                FIG_DIR / f"tsne_spazio_appreso_{split}.png")
 
     print("figura 2: zero-shot")
     z_v, z_t = emb["classe"]
@@ -230,7 +230,7 @@ def main():
                    new[idx_zs], top, names,
                    f"{what}: {len(idx)} clip a caso più tutte le {new.sum()} con combinazione "
                    f"verbo+nome assente dal train (bordate). {note}",
-                   FIG_DIR / f"p7_tsne_zero_shot_{split}.png")
+                   FIG_DIR / f"tsne_zero_shot_{split}.png")
 
     print("figura 3: perplexity")
     by_perplexity = {p: coords["classe"] if p == PERPLEXITY
@@ -238,7 +238,7 @@ def main():
     plot_perplexity(by_perplexity, verbs[idx], top, names,
                     f"{what}, MLP classe, {len(idx)} clip a caso (le stesse della figura "
                     f"spazio appreso) al variare della perplexity. {note}",
-                    FIG_DIR / f"p7_tsne_perplexity_{split}.png")
+                    FIG_DIR / f"tsne_perplexity_{split}.png")
 
 
 if __name__ == "__main__":

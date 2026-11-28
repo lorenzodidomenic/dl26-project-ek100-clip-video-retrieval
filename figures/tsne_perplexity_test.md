@@ -1,6 +1,6 @@
 # Ripasso: P7 · t-SNE al variare della perplexity (test)
 
-![t-SNE al variare della perplexity](p7_tsne_perplexity_test.png)
+![t-SNE al variare della perplexity](tsne_perplexity_test.png)
 
 ## Perché serve questa figura
 t-SNE ha un parametro, la **perplexity**: quanti vicini considera ogni punto (più o meno).
@@ -12,7 +12,7 @@ resta con tutte è reale. Questa figura è il **controllo di robustezza** delle 
 
 ## Cosa mostra
 - **MLP con loss `classe`, seed 0.**
-- **Le stesse 2000 clip** della figura `p7_tsne_spazio_appreso_test.png`, con gli stessi colori
+- **Le stesse 2000 clip** della figura `tsne_spazio_appreso_test.png`, con gli stessi colori
   e marker (cerchio = video, triangolo = frase; take, put, wash, grigio = altri verbi).
 - **Tre pannelli**: perplexity 15, 30 e 50. Il pannello a 30 è lo stesso fit del pannello
   "MLP, loss classe" della prima figura.

@@ -5,21 +5,21 @@ MLP con loss diag. MLP seed 0 come fissato in D4 di docs/roadmap_p6_test.md. Ste
 final_figures.py.
 
 Scelte fissate prima di guardare i risultati (dipendono solo dai metadati):
-1. figures/p7_recall_per_verbo.png: classe R@10 (% di query con almeno un video della stessa
+1. figures/analisi_recall_per_verbo.png: classe R@10 (% di query con almeno un video della stessa
    classe verbo+nome tra i primi 10) per i N_VERBS verbi piu' frequenti del test, ordinati per
    frequenza. Linea tratteggiata = classe R@10 del modello finale su tutte le query.
    Domanda: su quali azioni il modello va bene e su quali male?
-2. figures/p7_recall_per_frequenza.png: classe R@10 con le query divise per quante clip della
+2. figures/analisi_recall_per_frequenza.png: classe R@10 con le query divise per quante clip della
    loro classe verbo+nome ci sono nel train (FREQ_BINS: 0, 1-10, 11-100, oltre 100). Il gruppo
    "0" e' il sottoinsieme "combinazione nuova" di D3.
    Domanda: quanto conta aver visto la classe nel train?
    F1 e F2 non rilanciano nessun modello: leggono i ranghi per query salvati da evaluate_test.py
    (experiments/final/final_test_ranks.npz).
-3. figures/p7_tipi_di_errore.png: per ogni query, il primo video recuperato (top-1) confrontato
+3. figures/analisi_tipi_di_errore.png: per ogni query, il primo video recuperato (top-1) confrontato
    con la query: classe giusta, verbo giusto ma nome sbagliato, nome giusto ma verbo sbagliato,
    tutti e due sbagliati. Una barra al 100% per modello (ridge, MLP diag, MLP classe).
    Domanda: quando il top-1 e' sbagliato, cosa sbaglia?
-4. figures/p7_coppie_confuse.png: MLP classe. Tra le query con top-1 di classe sbagliata, le
+4. figures/analisi_coppie_confuse.png: MLP classe. Tra le query con top-1 di classe sbagliata, le
    N_CONFUSIONS coppie (classe della query -> classe del top-1) piu' frequenti, colorate con il
    tipo di errore di F3. Accanto, quante query della classe finiscono in quella confusione.
    Domanda: quali coppie verbo+nome il modello confonde di piu'? (obiettivo extra della traccia)
@@ -286,7 +286,7 @@ def main():
     data = np.load(OUT_RANKS)
     verbs, nouns = test_classes(data["narration_id"])
 
-    out = FIG_DIR / "p7_recall_per_verbo.png"
+    out = FIG_DIR / "analisi_recall_per_verbo.png"
     top, table = plot_per_verb(data, verbs, out)
     names = verb_names()
     print_table(f"classe R@{K} per verbo (test, seed {MLP_SEED})",
@@ -298,7 +298,7 @@ def main():
     # controllo: il gruppo "mai vista" deve coincidere con le combinazioni nuove di D3
     if not np.array_equal(masks[0], data["mask_combinazione_nuova"]):
         raise SystemExit("il gruppo 'mai vista' non coincide con mask_combinazione_nuova")
-    out = FIG_DIR / "p7_recall_per_frequenza.png"
+    out = FIG_DIR / "analisi_recall_per_frequenza.png"
     table = plot_per_frequency(data, masks, out)
     print_table(f"classe R@{K} per frequenza della classe nel train (test, seed {MLP_SEED})",
                 [f"{name} (n={int(m.sum())})" for (name, *_), m in zip(FREQ_BINS, masks)],
@@ -314,7 +314,7 @@ def main():
     for key, _ in ERROR_MODELS:
         diff = int(((types[key] == 0) != (data[f"{key}_classe"] == 1)).sum())
         print(f"  {key}: query in cui top-1 e rango classe 1 non coincidono: {diff}")
-    out = FIG_DIR / "p7_tipi_di_errore.png"
+    out = FIG_DIR / "analisi_tipi_di_errore.png"
     table = plot_error_types(types, out)
     print_table("tipo del top-1, % delle query (test, seed 0)",
                 [label for label, _ in ERROR_TYPES],
@@ -323,7 +323,7 @@ def main():
 
     key = FINAL_MODEL[0]
     confusions = top_confusions(verbs, nouns, top1[key], types[key])
-    out = FIG_DIR / "p7_coppie_confuse.png"
+    out = FIG_DIR / "analisi_coppie_confuse.png"
     plot_confusions(confusions, out)
     vn, nn = verb_names(), noun_names()
     print(f"\nconfusioni piu' frequenti, {key}:")

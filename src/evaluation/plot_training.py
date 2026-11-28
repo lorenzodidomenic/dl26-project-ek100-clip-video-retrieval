@@ -8,7 +8,7 @@ Quattro pannelli, ognuno con la sua scala:
 La linea verticale tratteggiata e' l'epoca scelta (migliore R@10 classe sul val).
 
 Uso: python src/evaluation/plot_training.py <nome run>   (es. mpnet_h1024_d256_..._s0)
-Output: figures/p3_train_<nome run>.png
+Output: figures/training_<nome run>.png
 """
 import argparse
 import csv
@@ -124,7 +124,7 @@ def main():
 
     fig.suptitle(args.name, x=0.01, ha="left", fontsize=10, color=INK_MUTED)
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-    out = FIG_DIR / f"p3_train_{args.name}.png"
+    out = FIG_DIR / f"training_{args.name}.png"
     fig.savefig(out, dpi=150, facecolor="white")
     print(f"salvato: {out}")
 

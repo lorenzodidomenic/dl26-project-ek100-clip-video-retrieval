@@ -18,10 +18,10 @@ finiti si applica la regola di scelta della roadmap:
    dropout piu' alto, poi la media.
 
 Output:
-- experiments/logs/p4_grid.csv: una riga per run al seed 0, ordinate per classe_R@10
-- experiments/logs/p4_seed.csv: le prime 5, media e dev. std sui seed (se ci sono)
-- figures/p4_effetti_principali.png, figures/p4_seed.png
-- figures/p4_heatmap_batch_tau.png e figures/p4_heatmap_lr_dropout.png
+- experiments/logs/griglia_risultati.csv: una riga per run al seed 0, ordinate per classe_R@10
+- experiments/logs/griglia_seed.csv: le prime 5, media e dev. std sui seed (se ci sono)
+- figures/griglia_effetti_principali.png, figures/griglia_seed.png
+- figures/griglia_heatmap_batch_tau.png e figures/griglia_heatmap_lr_dropout.png
 A schermo: effetti principali, prime 10 run, comando per i seed, riassunto dei seed e scelta.
 """
 import csv
@@ -41,8 +41,8 @@ from training import grid  # noqa: E402
 from training.train import CRITERION, ridge_reference  # noqa: E402
 from utils.features import write_csv  # noqa: E402
 
-OUT = ROOT / "experiments/logs/p4_grid.csv"
-OUT_SEED = ROOT / "experiments/logs/p4_seed.csv"
+OUT = ROOT / "experiments/logs/griglia_risultati.csv"
+OUT_SEED = ROOT / "experiments/logs/griglia_seed.csv"
 FIG_DIR = ROOT / "figures"
 TOP = 5
 SEEDS = (0, 1, 2)
@@ -286,11 +286,11 @@ def main():
         raise SystemExit("nessuna run della griglia ancora finita")
     write_csv(OUT, rows)
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-    plot_main_effects(rows, ridge_reference("mpnet"), FIG_DIR / "p4_effetti_principali.png")
-    plot_heatmap(rows, "batch", "tau", FIG_DIR / "p4_heatmap_batch_tau.png")
-    plot_heatmap(rows, "lr", "dropout", FIG_DIR / "p4_heatmap_lr_dropout.png")
+    plot_main_effects(rows, ridge_reference("mpnet"), FIG_DIR / "griglia_effetti_principali.png")
+    plot_heatmap(rows, "batch", "tau", FIG_DIR / "griglia_heatmap_batch_tau.png")
+    plot_heatmap(rows, "lr", "dropout", FIG_DIR / "griglia_heatmap_lr_dropout.png")
     print_summary(rows, len(grid.configs()))
-    print(f"\nsalvati: {OUT}\n         {FIG_DIR}/p4_effetti_principali.png, p4_heatmap_*.png")
+    print(f"\nsalvati: {OUT}\n         {FIG_DIR}/griglia_effetti_principali.png, griglia_heatmap_*.png")
 
     # seed: solo se c'e' almeno una run oltre al seed 0
     summary, runs = seed_summary(rows[:TOP])
@@ -298,9 +298,9 @@ def main():
         complete = all(s["seed_finiti"] == len(SEEDS) for s in summary)
         chosen, tied = choose(summary) if complete else (None, [])
         write_csv(OUT_SEED, summary)
-        plot_seeds(summary, runs, chosen, FIG_DIR / "p4_seed.png")
+        plot_seeds(summary, runs, chosen, FIG_DIR / "griglia_seed.png")
         print_seeds(summary, runs, chosen, tied)
-        print(f"\nsalvati: {OUT_SEED}\n         {FIG_DIR}/p4_seed.png")
+        print(f"\nsalvati: {OUT_SEED}\n         {FIG_DIR}/griglia_seed.png")
 
 
 if __name__ == "__main__":

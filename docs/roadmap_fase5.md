@@ -247,12 +247,12 @@ Regole:
 6. Chiusura: config scelta documentata qui e nel report.
 
 **Output:**
-- `experiments/logs/p4_grid.csv`: 48 run ordinate per criterio.
-- `experiments/logs/p4_seed.csv`: prime 5, media ± deviazione standard su 3 seed.
+- `experiments/logs/griglia_risultati.csv`: 48 run ordinate per criterio.
+- `experiments/logs/griglia_seed.csv`: prime 5, media ± deviazione standard su 3 seed.
 
 **Visualizzazioni:**
-- Effetti principali: per ogni iperparametro, media ± deviazione standard di R@10 classe per valore, con il ridge come riferimento (`figures/p4_effetti_principali.png`).
-- Heatmap delle interazioni `batch × τ` e `lr × dropout` (`figures/p4_heatmap_*.png`).
+- Effetti principali: per ogni iperparametro, media ± deviazione standard di R@10 classe per valore, con il ridge come riferimento (`figures/griglia_effetti_principali.png`).
+- Heatmap delle interazioni `batch × τ` e `lr × dropout` (`figures/griglia_heatmap_*.png`).
 - Tabella config ordinate.
 
 **Criterio per passare:** una config scelta con la regola sopra e documentata, con la sua variabilità sui seed.
@@ -264,7 +264,7 @@ Regole:
 - Effetti principali (48 run): d 256 > 128 (+1.0), τ fissa > appresa (+0.8), lr 1e-4 > 1e-3 (+0.7); dropout (+0.2) e batch (≤ 0.2) quasi ininfluenti. Tutte le 48 run battono il ridge (59.6): il minimo è 65.5.
 - Nota: sulla singola leva d=256 è meglio, ma la config scelta ha d=128. Gli effetti principali sono medie su tutte le altre leve, mentre la scelta riguarda una combinazione precisa; con il rumore osservato non c'è contraddizione.
 - Il guadagno rispetto alla config di partenza di P3 (68.5, un solo seed) è circa +0.8: con questi dati gli iperparametri contano poco rispetto al salto dal ridge (circa +9).
-- File: `experiments/logs/p4_grid.csv`, `p4_seed.csv`; figure `p4_effetti_principali.png`, `p4_heatmap_*.png`, `p4_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
+- File: `experiments/logs/griglia_risultati.csv`, `griglia_seed.csv`; figure `griglia_effetti_principali.png`, `griglia_heatmap_*.png`, `griglia_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
 
 **Esito (dataset completo, val, pipeline v2).** Griglia e seed rifatti da zero con le stesse
 regole (dettagli in `experiments/final/manifest.json`):
@@ -320,8 +320,8 @@ Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluat
 `src/evaluation/evaluate_test.py` (verifica sha256 dei checkpoint, prima `--split val`, poi
 `--split test` una volta) e `src/evaluation/final_figures.py`. Output in `experiments/final/`
 (`final_test.csv`, `final_test_ranks.npz`, anche su wandb come run `test-finale`). Figure
-`p6_recall_k.png`, `p6_risultati.png`, `p6_zero_shot.png`, `p6_matrice_similarita.png`, spiegate in
-`figures/p6_figure_spiegate.md`. Eseguito due volte: pipeline v1 (archiviata in
+`test_recall_k.png`, `test_risultati.png`, `test_combinazioni_nuove.png`, `test_matrice_similarita.png`, spiegate in
+`figures/test_figure_spiegate.md`. Eseguito due volte: pipeline v1 (archiviata in
 `experiments/archivio_v1/final/`) e pipeline v2 (quella in tabella al punto 2).
 
 ### P7 · Analisi qualitativa
@@ -341,31 +341,31 @@ scelta ne segue).
 
 **t-SNE dello spazio appreso** (`src/evaluation/plot_tsne.py`, 2000 clip a caso, video e frasi in un
 solo fit, metrica coseno), con note di lettura nei `.md` accanto alle figure:
-- `figures/p7_tsne_spazio_appreso_test.png` (MLP `diag` e `classe`): nessun modality gap visibile,
+- `figures/tsne_spazio_appreso_test.png` (MLP `diag` e `classe`): nessun modality gap visibile,
   video e frasi mescolati; wash ha una regione sua, take e put sono sparsi; lo spazio è organizzato
   in piccoli gruppi per verbo+nome; a scala di verbo le due loss si somigliano.
-- `figures/p7_tsne_zero_shot_test.png` (MLP `classe` più le 420 clip con combinazione nuova): le
+- `figures/tsne_zero_shot_test.png` (MLP `classe` più le 420 clip con combinazione nuova): le
   clip zero-shot hanno quasi tutte verbi poco frequenti (insert, mix, scoop), si concentrano in una
   parte della mappa e spesso frasi e video stanno in gruppi separati, coerente con il 15.7% di
   classe R@10 (seed 0).
-- `figures/p7_tsne_perplexity_test.png`: perplexity 15, 30, 50, controllo di robustezza.
+- `figures/tsne_perplexity_test.png`: perplexity 15, 30, 50, controllo di robustezza.
 
 **Analisi per verbo, per frequenza ed errori** (`src/evaluation/error_analysis.py`). Ridge contro MLP
 `classe`; in F3 anche MLP `diag`. Scelte (verbi, gruppi di frequenza) fissate solo dai metadati.
-- **F1** `figures/p7_recall_per_verbo.png`: classe R@10 per i 12 verbi più frequenti del test.
+- **F1** `figures/analisi_recall_per_verbo.png`: classe R@10 per i 12 verbi più frequenti del test.
   L'MLP batte il ridge su tutti e 12. I più deboli sono insert (41.9) e remove (39.9), gesti di
   spostamento dove conta l'oggetto; i più forti hanno un contesto visivo riconoscibile: open
   (91.4), turn-on (89.4), close (87.2), wash (86.4). Media su tutte le query: 74.0.
-- **F2** `figures/p7_recall_per_frequenza.png`: classe R@10 per numero di clip della classe
+- **F2** `figures/analisi_recall_per_frequenza.png`: classe R@10 per numero di clip della classe
   verbo+nome nel train. MLP: mai vista (420 query) 15.7, 1–10 (1165) 33.6, 11–100 (3033) 62.9,
   oltre 100 (5050) 94.8; ridge 10.5 / 14.1 / 31.8 / 72.8. Il risultato dipende molto dalla
   frequenza; il guadagno sul ridge è massimo sulle classi viste da 1 a 100 volte e minimo sulle
   combinazioni mai viste (+5). Sostituisce le barre "seen vs unseen".
-- **F3** `figures/p7_tipi_di_errore.png`: il primo video recuperato rispetto alla frase. Classe
+- **F3** `figures/analisi_tipi_di_errore.png`: il primo video recuperato rispetto alla frase. Classe
   giusta: ridge 16.7%, `diag` 31.4%, `classe` 38.4% (= classe R@1). Verbo e nome entrambi
   sbagliati: ridge 50.4%, `classe` 25.5%. Quando l'MLP sbaglia, sbaglia più spesso il verbo
   (22.6%) che il nome (13.5%): gli oggetti si riconoscono meglio delle azioni.
-- **F4** `figures/p7_coppie_confuse.png`: le 10 confusioni più frequenti del modello finale
+- **F4** `figures/analisi_coppie_confuse.png`: le 10 confusioni più frequenti del modello finale
   (classe della frase → classe del top-1). 7 su 10 sono azioni opposte sullo stesso oggetto
   (turn-off tap → turn-on tap, 143 query su 154; take plate → put plate; put spoon → take spoon),
   le altre oggetti simili (take fork → take spoon, take oil → take bottle). Risponde all'obiettivo
@@ -407,7 +407,7 @@ i 9668 video, giusto = stessa classe verbo+nome):
 **Lettura:**
 - **Combinazioni nuove:** la sola misura con abbastanza query. Gli MLP battono il ridge (14.8
   contro 10.5 di classe R@10, rango mediano circa 2.5 volte migliore), ma restano molto sotto le
-  query di classi viste (73.7): il modello compone poco. Vedi anche F2 di P7 e `p6_zero_shot.png`.
+  query di classi viste (73.7): il modello compone poco. Vedi anche F2 di P7 e `test_combinazioni_nuove.png`.
 - **Nomi mai visti:** R@10 quasi nullo per tutti, ma sul rango mediano il **ridge è migliore**
   degli MLP (66.5 contro 343 e 702). Un'ipotesi coerente: il ridge, lineare e molto regolarizzato,
   conserva di più la geometria di MPNet, mentre gli MLP si specializzano sulle classi del train.
@@ -506,7 +506,7 @@ più azioni montate.
    la matrice di coseno frasi × clip (6 × 6).
 2. **Figura `figures/demo_clip_esterne.png`.** In alto una miniatura per clip, a sinistra le
    frasi; in ogni cella la probabilità che la frase scelga quella clip (softmax della riga,
-   τ = 0.07, come `p6_matrice_similarita.png`); diagonale bordata = coppia giusta. Nel titolo:
+   τ = 0.07, come `test_matrice_similarita.png`); diagonale bordata = coppia giusta. Nel titolo:
    quante frasi su 6 trovano la loro clip al primo posto (caso: 1 su 6).
 3. **Opzione `--query "frase"`.** Stampa la classifica delle 6 clip per una frase libera, per
    provare dal vivo all'esame anche parole mai viste (es. "slice watermelon", "add parmesan").
