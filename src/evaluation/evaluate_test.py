@@ -3,7 +3,7 @@
 Modelli valutati (D1):
 - caso: esatto analitico (R@K = K/N, rango mediano (N+1)/2), classe con similarita' casuali;
 - baseline: proiezioni lineari casuali non allenate, come baseline_zero_shot.py, media su 10 seed;
-- ridge: λ letto dal log del val (experiments/logs/linear_alignment.csv), come linear_alignment.py;
+- ridge: λ letto dal log del val (experiments/results/linear_alignment.csv), come linear_alignment.py;
 - MLP diag e MLP classe: i 3 seed di experiments/final/manifest.json, con sha256 verificato.
 
 Metriche (D2), testo -> video, ogni query cerca tra tutti i video dello split:

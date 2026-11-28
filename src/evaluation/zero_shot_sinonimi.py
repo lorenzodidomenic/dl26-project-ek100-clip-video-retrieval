@@ -43,7 +43,7 @@ from evaluation.evaluate_test import (  # noqa: E402
     ENCODER, FINAL, OUT_RANKS, load_manifest, mlp_embed)
 from evaluation.linear_alignment import best_val_lambdas, ridge, standardize  # noqa: E402
 from evaluation.metrics import first_relevant_rank  # noqa: E402
-from evaluation.p6_figures import style  # noqa: E402
+from evaluation.final_figures import style  # noqa: E402
 from evaluation.plot_training import INK, plt  # noqa: E402
 from models.text_encoders import MpnetEncoder  # noqa: E402
 from utils.features import l2_normalize, load_pair, load_split, write_csv  # noqa: E402

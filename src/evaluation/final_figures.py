@@ -4,20 +4,20 @@ Figure solo descrittive: non ne segue nessuna scelta. Seed fissati prima del tes
 MLP seed 0, baseline seed 42 (il primo dei suoi 10). Modelli e colori uguali in tutte le figure:
 baseline casuale ("prima del training"), ridge, MLP diag, MLP classe ("dopo").
 
-1. figures/p6_recall_k.png: curva R@K al variare di K (da 1 a N, asse logaritmico), due pannelli
+1. figures/test_recall_k.png: curva R@K al variare di K (da 1 a N, asse logaritmico), due pannelli
    (esatto, classe). R@K = % di query con il primo video giusto entro i primi K: a K = 1, 5, 10 la
    curva vale le R@1/5/10 della tabella. Legge i ranghi salvati in final_test_ranks.npz.
 
-2. figures/p6_risultati.png: la tabella finale come barre. Pannelli esatto e classe; per R@1, R@5
+2. figures/test_risultati.png: la tabella finale come barre. Pannelli esatto e classe; per R@1, R@5
    e R@10 una barra per modello, con la dev. std sui seed come barra di errore (baseline 10 seed,
    MLP 3; il ridge non ha seed). Legge final_test.csv.
 
-3. figures/p6_zero_shot.png: R@10 su tutte le query del test e sulle query con combinazione
+3. figures/test_combinazioni_nuove.png: R@10 su tutte le query del test e sulle query con combinazione
    verbo+nome mai vista nel train (D3, metrica zero-shot principale). Pannelli esatto e classe,
    barre e barre di errore come sopra. Legge final_test.csv (i nomi mai visti, 24 query, restano
    solo in tabella: troppo pochi per una barra affidabile).
 
-4. figures/p6_matrice_similarita.png: matrice frasi x video "stile CLIP" su 30 clip del test,
+4. figures/test_matrice_similarita.png: matrice frasi x video "stile CLIP" su 30 clip del test,
    ordinate per classe (6 classi verbo+nome x 5 clip). Righe = frasi, colonne = i video delle
    stesse clip nello stesso ordine: la diagonale (bordata) e' la coppia esatta, i quadrati lungo la
    diagonale le coppie della stessa classe. In ogni cella la probabilita' che la frase scelga quel
@@ -32,7 +32,7 @@ baseline casuale ("prima del training"), ridge, MLP diag, MLP classe ("dopo").
    distinguerebbe dal blocco per costruzione). Le similarita' si ricalcolano dai checkpoint con
    mlp_sim di evaluate_test.py.
 
-Uso: python src/evaluation/p6_figures.py
+Uso: python src/evaluation/final_figures.py
 """
 import csv
 import sys
@@ -248,16 +248,16 @@ def main():
     n_query = len(data["narration_id"])
     n_new = int(data["mask_combinazione_nuova"].sum())
 
-    plot_recall_k(data, FIG_DIR / "p6_recall_k.png")
-    print(f"salvato: {FIG_DIR / 'p6_recall_k.png'}")
+    plot_recall_k(data, FIG_DIR / "test_recall_k.png")
+    print(f"salvato: {FIG_DIR / 'test_recall_k.png'}")
 
     results = read_results(RESULTS["test"])
     plot_bars(results,
               [(f"giusto = {tag}", [(f"R@{k}", f"{tag}_R@{k}") for k in KS])
                for tag in ("esatto", "classe")],
               f"Test ({n_query} query): R@1/5/10 testo → video. Barre di errore: dev. std sui "
-              "seed (baseline 10, MLP 3)", FIG_DIR / "p6_risultati.png")
-    print(f"salvato: {FIG_DIR / 'p6_risultati.png'}")
+              "seed (baseline 10, MLP 3)", FIG_DIR / "test_risultati.png")
+    print(f"salvato: {FIG_DIR / 'test_risultati.png'}")
 
     plot_bars(results,
               [(f"R@10, giusto = {tag}", [(f"tutte le query\n(n={n_query})", f"{tag}_R@10"),
@@ -265,8 +265,8 @@ def main():
                                           f"nuove_{tag}_R@10")])
                for tag in ("esatto", "classe")],
               "Test, zero-shot: R@10 su tutte le query e su quelle con combinazione verbo+nome "
-              "assente dal train", FIG_DIR / "p6_zero_shot.png")
-    print(f"salvato: {FIG_DIR / 'p6_zero_shot.png'}")
+              "assente dal train", FIG_DIR / "test_combinazioni_nuove.png")
+    print(f"salvato: {FIG_DIR / 'test_combinazioni_nuove.png'}")
 
     video, text, meta = load_pair(ENCODER, "test", normalize=False)
     idx, class_of = select_matrix_clips(meta)
@@ -277,7 +277,7 @@ def main():
     probs = {"MLP, loss diag": row_softmax(sims["diag"]),
              "MLP, loss classe (finale)": row_softmax(sims["classe"])}
     labels = [str(meta["narration"][i]) for i in idx]
-    plot_matrix(probs, labels, class_of, FIG_DIR / "p6_matrice_similarita.png")
+    plot_matrix(probs, labels, class_of, FIG_DIR / "test_matrice_similarita.png")
     print("\nclip della matrice, una riga per classe:")
     for c in range(MATRIX_CLASSES):
         print(f"  {c + 1}. " + " | ".join(np.array(labels)[class_of == c]))
@@ -285,7 +285,7 @@ def main():
     for title, prob in probs.items():
         summary = matrix_summary(prob, class_of)
         print(f"  {title}: " + ", ".join(f"{k} {v:.0%}" for k, v in summary.items()))
-    print(f"salvato: {FIG_DIR / 'p6_matrice_similarita.png'}")
+    print(f"salvato: {FIG_DIR / 'test_matrice_similarita.png'}")
 
 
 if __name__ == "__main__":

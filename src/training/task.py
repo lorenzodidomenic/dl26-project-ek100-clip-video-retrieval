@@ -17,7 +17,7 @@ import pytorch_lightning as pl
 import torch
 
 from evaluation.linear_alignment import evaluate
-from training.heads import DualHead
+from models.heads import DualHead
 from training.loss import InfoNCE
 
 

@@ -8,7 +8,7 @@ Quattro pannelli, ognuno con la sua scala:
 La linea verticale tratteggiata e' l'epoca scelta (migliore R@10 classe sul val).
 
 Uso: python src/evaluation/plot_training.py <nome run>   (es. mpnet_h1024_d256_..._s0)
-Output: figures/p3_train_<nome run>.png
+Output: figures/training_<nome run>.png
 """
 import argparse
 import csv
@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt  # noqa: E402  pylint: disable=wrong-import-posi
 
 ROOT = Path(__file__).resolve().parents[2]
 LOG_DIR = ROOT / "experiments/logs"
-RIDGE_LOG = LOG_DIR / "linear_alignment.csv"
+RIDGE_LOG = ROOT / "experiments/results/linear_alignment.csv"
 FIG_DIR = ROOT / "figures"
 CRITERION = "classe_R@10"
 ENCODERS = ("bert", "mpnet", "clip")
@@ -48,7 +48,7 @@ def ridge_reference(encoder):
 def clean_axes(ax, grid_axis="y"):
     """Griglia leggera, bordi alto e destro nascosti, tick in inchiostro neutro.
 
-    Stile comune a tutte le figure del progetto (anche p4_grid.py e p6_figures.py).
+    Stile comune a tutte le figure del progetto (anche grid_results.py e final_figures.py).
     """
     ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
@@ -124,7 +124,7 @@ def main():
 
     fig.suptitle(args.name, x=0.01, ha="left", fontsize=10, color=INK_MUTED)
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-    out = FIG_DIR / f"p3_train_{args.name}.png"
+    out = FIG_DIR / f"training_{args.name}.png"
     fig.savefig(out, dpi=150, facecolor="white")
     print(f"salvato: {out}")
 

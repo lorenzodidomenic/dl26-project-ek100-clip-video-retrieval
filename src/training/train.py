@@ -18,6 +18,15 @@ Il test non viene mai usato qui.
 
 Output: experiments/logs/train_<nome>.csv (una riga per epoca),
 experiments/checkpoints/<nome>.ckpt (epoca migliore sul val) e la run su wandb.
+
+Iperparametri da file: --config <file.yaml> legge le opzioni da un YAML di experiments/configs/
+(chiavi = nomi delle opzioni con l'underscore). Le opzioni da riga di comando valgono piu' del
+file. Senza --config valgono i default qui sotto.
+
+Uso:
+    python src/training/train.py --config experiments/configs/final.yaml            # modello finale
+    python src/training/train.py --config experiments/configs/final.yaml --seed 1   # altro seed
+    python src/training/train.py --dim 128 --lr 1e-4 --fixed-tau                    # solo flag
 """
 import argparse
 import csv
@@ -28,6 +37,7 @@ from pathlib import Path
 import pytorch_lightning as pl
 import torch
 import wandb
+import yaml
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader, Subset
@@ -95,13 +105,43 @@ def run_name(args):
             f"_lr{args.lr:g}_b{args.batch}_{tau}{pos}_s{args.seed}")
 
 
+def config_to_argv(path):
+    """Opzioni di un file YAML trasformate in flag di riga di comando.
+
+    {"dim": 128, "fixed_tau": True} -> ["--dim", "128", "--fixed-tau"]. Passando dai flag,
+    argparse controlla tipi, scelte e nomi delle chiavi come per la riga di comando
+    (una chiave sbagliata da' "unrecognized arguments").
+    """
+    with open(path, encoding="utf-8") as f:
+        config = yaml.safe_load(f) or {}
+    argv = []
+    for key, value in config.items():
+        flag = "--" + key.replace("_", "-")
+        if isinstance(value, bool):        # opzioni si'/no: --fixed-tau oppure --no-fixed-tau
+            argv.append(flag if value else "--no-" + flag[2:])
+        else:
+            argv += [flag, str(value)]
+    return argv
+
+
 def parse_args(argv=None):
-    """Iperparametri della run; i default sono quelli della roadmap.
+    """Iperparametri della run: default qui sotto, poi il file di --config, poi la riga di comando.
 
     argv None legge la riga di comando; una lista (es. da grid.py) viene letta al suo posto.
     """
+    if argv is None:
+        argv = sys.argv[1:]
+    # prima passata: solo --config. I flag del file vanno prima di quelli della riga di comando,
+    # e argparse tiene l'ultimo valore, quindi la riga di comando vale piu' del file
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config")
+    known, rest = pre.parse_known_args(argv)
+    if known.config:
+        argv = config_to_argv(known.config) + rest
+
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--config", help="file YAML con le opzioni (es. experiments/configs/final.yaml)")
     parser.add_argument("--encoder", default="mpnet", choices=["bert", "mpnet", "clip"])
     parser.add_argument("--hidden", type=int, default=1024)
     parser.add_argument("--dim", type=int, default=256)
@@ -109,7 +149,10 @@ def parse_args(argv=None):
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-2)
     parser.add_argument("--batch", type=int, default=256)
-    parser.add_argument("--fixed-tau", action="store_true", help="tau fissa a 0.07")
+    # --fixed-tau / --no-fixed-tau: il secondo serve a spegnere da riga di comando una tau fissa
+    # scritta nel file di config
+    parser.add_argument("--fixed-tau", action=argparse.BooleanOptionalAction, default=False,
+                        help="tau fissa a 0.07 (default: appresa)")
     parser.add_argument("--positives", default="diag", choices=POSITIVES,
                         help="coppie positive nella loss: diag (classica), frase, classe")
     parser.add_argument("--epochs", type=int, default=200)
@@ -149,7 +192,7 @@ def main():  # pylint: disable=too-many-locals
 
     monitor = f"val/{CRITERION}"
     # min_delta 0 e confronto stretto: migliora solo un valore strettamente maggiore,
-    # quindi l'epoca salvata e' la prima con il massimo (come assume anche p4_grid.py)
+    # quindi l'epoca salvata e' la prima con il massimo (come assume anche grid_results.py)
     early_stop = EarlyStopping(monitor=monitor, mode="max", patience=args.patience)
     checkpoint = ModelCheckpoint(dirpath=CKPT_DIR, filename=args.name, monitor=monitor,
                                  mode="max", save_top_k=1, save_weights_only=True,

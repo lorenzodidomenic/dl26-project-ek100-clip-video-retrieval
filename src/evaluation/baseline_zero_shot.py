@@ -31,7 +31,7 @@ USO:
     python3 baseline_zero_shot.py
     python3 baseline_zero_shot.py --proj-dim 512 --seed 0 --n-seeds 20
 
-Output: tabella a schermo e experiments/logs/baseline_zero_shot.csv
+Output: tabella a schermo e experiments/results/baseline_zero_shot.csv
 (una riga per seed, piu' la riga "media" e la riga "atteso" dal caso).
 """
 
@@ -58,7 +58,7 @@ TEXT_SEED_OFFSET = 1_000_000  # il testo usa seed + offset: mai la stessa matric
 # ============================================================================
 
 KS = (1, 5, 10)     # ranghi che vengono testati
-OUT = ROOT / "experiments/logs/baseline_zero_shot.csv"
+OUT = ROOT / "experiments/results/baseline_zero_shot.csv"
 
 
 def proiezione_casuale(x, dim_out, seed):

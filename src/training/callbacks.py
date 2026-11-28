@@ -3,7 +3,7 @@
 MetricHistoryCallback, come nei laboratori, raccoglie a ogni epoca le metriche in un dizionario
 history (nome -> lista di valori). In piu' riscrive il CSV experiments/logs/train_<nome>.csv
 con le stesse colonne di prima del passaggio a Lightning (epoca, loss_train, loss_val, tau e le
-metriche di val), che leggono grid.py, p4_grid.py e plot_training.py.
+metriche di val), che leggono grid.py, grid_results.py e plot_training.py.
 
 Si aggancia a on_train_epoch_end: in Lightning la validazione gira dentro l'epoca di training,
 prima di questo hook, quindi qui ci sono sia la loss media di train sia le metriche di val.

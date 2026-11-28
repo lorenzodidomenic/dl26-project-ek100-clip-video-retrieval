@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 # pylint: disable=wrong-import-position
 from evaluation.evaluate_test import load_manifest, mlp_embed  # noqa: E402
-from evaluation.p6_figures import BLUES, TAU, row_softmax  # noqa: E402
+from evaluation.final_figures import BLUES, TAU, row_softmax  # noqa: E402
 from evaluation.plot_training import INK, INK_MUTED, plt  # noqa: E402
 
 CLIPS_CSV = ROOT / "experiments/demo/clips.csv"

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 # pylint: disable=wrong-import-position
 from evaluation.metrics import exact_relevance, retrieval_metrics  # noqa: E402
-from training.heads import DualHead  # noqa: E402
+from models.heads import DualHead  # noqa: E402
 from training.loss import InfoNCE  # noqa: E402
 from utils.dataset import FeaturePairs  # noqa: E402
 

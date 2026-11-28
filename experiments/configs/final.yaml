@@ -1,0 +1,20 @@
+# Modello finale: config scelta sul val (P4 + ablation della loss + mini-griglia),
+# vedi experiments/final/manifest.json e docs/roadmap_fase5.md.
+#
+# Uso:  python src/training/train.py --config experiments/configs/final.yaml --seed 1
+# Le chiavi sono le opzioni di train.py (trattino -> underscore); un'opzione passata anche da
+# riga di comando vale piu' del file.
+
+encoder: mpnet          # text encoder congelato (feature in data/features/text/)
+hidden: 1024            # H, larghezza dello strato nascosto delle teste
+dim: 128                # d, dimensione dello spazio comune
+dropout: 0.3
+lr: 1.0e-4              # scritto con il punto: PyYAML legge 1e-4 come stringa
+weight_decay: 1.0e-2
+batch: 256
+fixed_tau: true         # tau fissa a 0.07
+positives: classe       # loss multi-positivo: positive le clip con stesso verbo e nome
+epochs: 200
+patience: 10            # early stopping su val/classe_R@10
+seed: 0                 # i modelli finali usano i seed 0, 1, 2
+accelerator: cpu

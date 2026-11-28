@@ -200,7 +200,7 @@ Regole:
 ### P2 · Modello, loss e test di correttezza
 **Obiettivo:** codice corretto prima di qualsiasi training vero.
 
-- `src/training/heads.py`: le teste.
+- `src/models/heads.py`: le teste.
 - `src/training/loss.py`: InfoNCE simmetrica.
 - Funzione di metriche che riusa `retrieval_metrics`.
 - **Test di overfit** su 256 coppie di train: la loss deve andare quasi a zero e R@1 sul sottoinsieme ~100%. Se no, c'è un bug (quasi sempre allineamento o diagonale).
@@ -234,7 +234,7 @@ Regole:
 - La run di P3 è una delle 48 celle e viene riusata: le run nuove sono 47.
 - **Device CPU**: con un modello così piccolo MPS guadagna al massimo circa il 25%, e su MPS lo stesso seed non garantisce lo stesso risultato. Costo misurato: circa 2.5–3.5 s per epoca, quindi circa 1–2 h per la griglia.
 - **Seed sulle prime 5**: dopo la griglia, le prime 5 config si rilanciano con seed 1 e 2 (10 run). Si sceglie sulla media dei 3 seed, perché il massimo di 48 misure rumorose (±3 punti tra epoche) è ottimista.
-- **Regola di scelta**, fissata prima di vedere i risultati: vince la media più alta; se due config distano meno di una deviazione standard (la maggiore delle due), vince la più semplice (d più piccolo, poi dropout più alto, poi la media). Applicata in automatico da `p4_grid.py` quando tutti i seed sono finiti.
+- **Regola di scelta**, fissata prima di vedere i risultati: vince la media più alta; se due config distano meno di una deviazione standard (la maggiore delle due), vince la più semplice (d più piccolo, poi dropout più alto, poi la media). Applicata in automatico da `grid_results.py` quando tutti i seed sono finiti.
 - Criterio: R@10 classe sul val, come in `linear_alignment`. Non usare il test.
 - Restano fuori da P4 la loss multi-positivo e il rumore sull'input: diventano ablation sulla config scelta (vedi P8).
 
@@ -242,17 +242,17 @@ Regole:
 1. `train.py`: estrarre il nome della run in una funzione `run_name(args)`, condivisa con lo script della griglia.
 2. `src/training/grid.py`: genera le 48 config e lancia `train.py` in un processo separato per ciascuna. Una run conta come fatta se il suo log mostra un training finito (early stopping o ultima epoca) e il checkpoint esiste; si può interrompere e rilanciare. Opzioni `--dry-run`, `--seeds` e `--only`.
 3. Esecuzione: `caffeinate -i python src/training/grid.py`.
-4. `src/evaluation/p4_grid.py`: run e iperparametri presi dalla definizione della griglia in `grid.py` (solo le run finite), epoca migliore dal log con la regola di `train.py`; tabella e grafici. Si può lanciare anche con la griglia in corso.
+4. `src/evaluation/grid_results.py`: run e iperparametri presi dalla definizione della griglia in `grid.py` (solo le run finite), epoca migliore dal log con la regola di `train.py`; tabella e grafici. Si può lanciare anche con la griglia in corso.
 5. Seed 1 e 2 sulle prime 5, tabella con media ± deviazione standard.
 6. Chiusura: config scelta documentata qui e nel report.
 
 **Output:**
-- `experiments/logs/p4_grid.csv`: 48 run ordinate per criterio.
-- `experiments/logs/p4_seed.csv`: prime 5, media ± deviazione standard su 3 seed.
+- `experiments/results/griglia_risultati.csv`: 48 run ordinate per criterio.
+- `experiments/results/griglia_seed.csv`: prime 5, media ± deviazione standard su 3 seed.
 
 **Visualizzazioni:**
-- Effetti principali: per ogni iperparametro, media ± deviazione standard di R@10 classe per valore, con il ridge come riferimento (`figures/p4_effetti_principali.png`).
-- Heatmap delle interazioni `batch × τ` e `lr × dropout` (`figures/p4_heatmap_*.png`).
+- Effetti principali: per ogni iperparametro, media ± deviazione standard di R@10 classe per valore, con il ridge come riferimento (`figures/griglia_effetti_principali.png`).
+- Heatmap delle interazioni `batch × τ` e `lr × dropout` (`figures/griglia_heatmap_*.png`).
 - Tabella config ordinate.
 
 **Criterio per passare:** una config scelta con la regola sopra e documentata, con la sua variabilità sui seed.
@@ -264,7 +264,7 @@ Regole:
 - Effetti principali (48 run): d 256 > 128 (+1.0), τ fissa > appresa (+0.8), lr 1e-4 > 1e-3 (+0.7); dropout (+0.2) e batch (≤ 0.2) quasi ininfluenti. Tutte le 48 run battono il ridge (59.6): il minimo è 65.5.
 - Nota: sulla singola leva d=256 è meglio, ma la config scelta ha d=128. Gli effetti principali sono medie su tutte le altre leve, mentre la scelta riguarda una combinazione precisa; con il rumore osservato non c'è contraddizione.
 - Il guadagno rispetto alla config di partenza di P3 (68.5, un solo seed) è circa +0.8: con questi dati gli iperparametri contano poco rispetto al salto dal ridge (circa +9).
-- File: `experiments/logs/p4_grid.csv`, `p4_seed.csv`; figure `p4_effetti_principali.png`, `p4_heatmap_*.png`, `p4_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
+- File: `experiments/results/griglia_risultati.csv`, `griglia_seed.csv`; figure `griglia_effetti_principali.png`, `griglia_heatmap_*.png`, `griglia_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
 
 **Esito (dataset completo, val, pipeline v2).** Griglia e seed rifatti da zero con le stesse
 regole (dettagli in `experiments/final/manifest.json`):
@@ -301,7 +301,7 @@ dichiarato come informativo.
 
 MPNet è migliore su tutte le metriche e per tutti i modelli allenati (anche ridge e MLP `diag`).
 Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluation/encoder_compare.py`,
-`experiments/final/final_test_bert.csv`, `experiments/logs/encoder_compare.csv`.
+`experiments/final/final_test_bert.csv`, `experiments/results/encoder_compare.csv`.
 
 ### P6 · Valutazione finale sul test
 **Obiettivo:** il numero del report.
@@ -318,10 +318,10 @@ Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluat
 
 **Esito: fatto** (piano completo e decisioni pre-registrate in `docs/roadmap_p6_test.md`). Script
 `src/evaluation/evaluate_test.py` (verifica sha256 dei checkpoint, prima `--split val`, poi
-`--split test` una volta) e `src/evaluation/p6_figures.py`. Output in `experiments/final/`
+`--split test` una volta) e `src/evaluation/final_figures.py`. Output in `experiments/final/`
 (`final_test.csv`, `final_test_ranks.npz`, anche su wandb come run `test-finale`). Figure
-`p6_recall_k.png`, `p6_risultati.png`, `p6_zero_shot.png`, `p6_matrice_similarita.png`, spiegate in
-`figures/p6_figure_spiegate.md`. Eseguito due volte: pipeline v1 (archiviata in
+`test_recall_k.png`, `test_risultati.png`, `test_combinazioni_nuove.png`, `test_matrice_similarita.png`, spiegate in
+`figures/test_figure_spiegate.md`. Eseguito due volte: pipeline v1 (archiviata in
 `experiments/archivio_v1/final/`) e pipeline v2 (quella in tabella al punto 2).
 
 ### P7 · Analisi qualitativa
@@ -339,33 +339,33 @@ Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluat
 **Esito: fatto** (sul test, modelli seed 0 come fissato in D4; figure solo descrittive, nessuna
 scelta ne segue).
 
-**t-SNE dello spazio appreso** (`src/evaluation/p7_tsne.py`, 2000 clip a caso, video e frasi in un
+**t-SNE dello spazio appreso** (`src/evaluation/plot_tsne.py`, 2000 clip a caso, video e frasi in un
 solo fit, metrica coseno), con note di lettura nei `.md` accanto alle figure:
-- `figures/p7_tsne_spazio_appreso_test.png` (MLP `diag` e `classe`): nessun modality gap visibile,
+- `figures/tsne_spazio_appreso_test.png` (MLP `diag` e `classe`): nessun modality gap visibile,
   video e frasi mescolati; wash ha una regione sua, take e put sono sparsi; lo spazio è organizzato
   in piccoli gruppi per verbo+nome; a scala di verbo le due loss si somigliano.
-- `figures/p7_tsne_zero_shot_test.png` (MLP `classe` più le 420 clip con combinazione nuova): le
+- `figures/tsne_zero_shot_test.png` (MLP `classe` più le 420 clip con combinazione nuova): le
   clip zero-shot hanno quasi tutte verbi poco frequenti (insert, mix, scoop), si concentrano in una
   parte della mappa e spesso frasi e video stanno in gruppi separati, coerente con il 15.7% di
   classe R@10 (seed 0).
-- `figures/p7_tsne_perplexity_test.png`: perplexity 15, 30, 50, controllo di robustezza.
+- `figures/tsne_perplexity_test.png`: perplexity 15, 30, 50, controllo di robustezza.
 
-**Analisi per verbo, per frequenza ed errori** (`src/evaluation/p7_analysis.py`). Ridge contro MLP
+**Analisi per verbo, per frequenza ed errori** (`src/evaluation/error_analysis.py`). Ridge contro MLP
 `classe`; in F3 anche MLP `diag`. Scelte (verbi, gruppi di frequenza) fissate solo dai metadati.
-- **F1** `figures/p7_recall_per_verbo.png`: classe R@10 per i 12 verbi più frequenti del test.
+- **F1** `figures/analisi_recall_per_verbo.png`: classe R@10 per i 12 verbi più frequenti del test.
   L'MLP batte il ridge su tutti e 12. I più deboli sono insert (41.9) e remove (39.9), gesti di
   spostamento dove conta l'oggetto; i più forti hanno un contesto visivo riconoscibile: open
   (91.4), turn-on (89.4), close (87.2), wash (86.4). Media su tutte le query: 74.0.
-- **F2** `figures/p7_recall_per_frequenza.png`: classe R@10 per numero di clip della classe
+- **F2** `figures/analisi_recall_per_frequenza.png`: classe R@10 per numero di clip della classe
   verbo+nome nel train. MLP: mai vista (420 query) 15.7, 1–10 (1165) 33.6, 11–100 (3033) 62.9,
   oltre 100 (5050) 94.8; ridge 10.5 / 14.1 / 31.8 / 72.8. Il risultato dipende molto dalla
   frequenza; il guadagno sul ridge è massimo sulle classi viste da 1 a 100 volte e minimo sulle
   combinazioni mai viste (+5). Sostituisce le barre "seen vs unseen".
-- **F3** `figures/p7_tipi_di_errore.png`: il primo video recuperato rispetto alla frase. Classe
+- **F3** `figures/analisi_tipi_di_errore.png`: il primo video recuperato rispetto alla frase. Classe
   giusta: ridge 16.7%, `diag` 31.4%, `classe` 38.4% (= classe R@1). Verbo e nome entrambi
   sbagliati: ridge 50.4%, `classe` 25.5%. Quando l'MLP sbaglia, sbaglia più spesso il verbo
   (22.6%) che il nome (13.5%): gli oggetti si riconoscono meglio delle azioni.
-- **F4** `figures/p7_coppie_confuse.png`: le 10 confusioni più frequenti del modello finale
+- **F4** `figures/analisi_coppie_confuse.png`: le 10 confusioni più frequenti del modello finale
   (classe della frase → classe del top-1). 7 su 10 sono azioni opposte sullo stesso oggetto
   (turn-off tap → turn-on tap, 143 query su 154; take plate → put plate; put spoon → take spoon),
   le altre oggetti simili (take fork → take spoon, take oil → take bottle). Risponde all'obiettivo
@@ -407,7 +407,7 @@ i 9668 video, giusto = stessa classe verbo+nome):
 **Lettura:**
 - **Combinazioni nuove:** la sola misura con abbastanza query. Gli MLP battono il ridge (14.8
   contro 10.5 di classe R@10, rango mediano circa 2.5 volte migliore), ma restano molto sotto le
-  query di classi viste (73.7): il modello compone poco. Vedi anche F2 di P7 e `p6_zero_shot.png`.
+  query di classi viste (73.7): il modello compone poco. Vedi anche F2 di P7 e `test_combinazioni_nuove.png`.
 - **Nomi mai visti:** R@10 quasi nullo per tutti, ma sul rango mediano il **ridge è migliore**
   degli MLP (66.5 contro 343 e 702). Un'ipotesi coerente: il ridge, lineare e molto regolarizzato,
   conserva di più la geometria di MPNet, mentre gli MLP si specializzano sulle classi del train.
@@ -506,7 +506,7 @@ più azioni montate.
    la matrice di coseno frasi × clip (6 × 6).
 2. **Figura `figures/demo_clip_esterne.png`.** In alto una miniatura per clip, a sinistra le
    frasi; in ogni cella la probabilità che la frase scelga quella clip (softmax della riga,
-   τ = 0.07, come `p6_matrice_similarita.png`); diagonale bordata = coppia giusta. Nel titolo:
+   τ = 0.07, come `test_matrice_similarita.png`); diagonale bordata = coppia giusta. Nel titolo:
    quante frasi su 6 trovano la loro clip al primo posto (caso: 1 su 6).
 3. **Opzione `--query "frase"`.** Stampa la classifica delle 6 clip per una frase libera, per
    provare dal vivo all'esame anche parole mai viste (es. "slice watermelon", "add parmesan").
@@ -558,21 +558,21 @@ con più clip si abbassano.
 | Percorso | Contenuto |
 |---|---|
 | `src/utils/dataset.py` | `FeaturePairs` (Dataset) e DataLoader delle coppie video–testo |
-| `src/training/heads.py` | teste MLP |
+| `src/models/heads.py` | teste MLP |
 | `src/training/loss.py` | InfoNCE simmetrica, anche multi-positivo (`diag`, `frase`, `classe`) |
 | `src/training/task.py` | `RetrievalTask`, il `LightningModule` (teste + loss + AdamW, metriche val a fine epoca) |
 | `src/training/callbacks.py` | storico delle metriche per epoca e CSV di log |
 | `src/training/train.py` | `pl.Trainer` con early stopping, checkpoint e logger wandb |
 | `src/training/grid.py` | lancio della griglia di P4 e dei seed |
-| `src/evaluation/p4_grid.py` | tabella, effetti principali, heatmap e seed di P4, con la scelta della config |
+| `src/evaluation/grid_results.py` | tabella, effetti principali, heatmap e seed di P4, con la scelta della config |
 | `src/evaluation/evaluate_test.py` | valutazione finale (P6), `--split val` per la verifica, `--encoder` per BERT |
-| `src/evaluation/p6_figures.py` | figure di P6 |
+| `src/evaluation/final_figures.py` | figure di P6 |
 | `src/evaluation/encoder_compare.py` | confronto MPNet–BERT sul test (P5) |
-| `src/evaluation/p7_tsne.py` | t-SNE dello spazio appreso (P7) |
+| `src/evaluation/plot_tsne.py` | t-SNE dello spazio appreso (P7) |
 | `experiments/final/` | checkpoint scelti, `manifest.json` (scelta e sha256), risultati di P6 (su git, tranne i checkpoint) |
 | `experiments/archivio_v1/` | checkpoint, log e risultati del test della pipeline v1 |
 | `*/subset4p/`, `figures/figures4p/` | archivio dello studio pilota sul subset di 4 partecipanti (split, feature testo, log, checkpoint, figure) |
-| `src/evaluation/p7_analysis.py` | R@10 per verbo e per frequenza, tipi di errore e coppie confuse del top-1 (P7) |
+| `src/evaluation/error_analysis.py` | R@10 per verbo e per frequenza, tipi di errore e coppie confuse del top-1 (P7) |
 | `src/evaluation/zero_shot_sinonimi.py` | zero-shot sulle parole: frasi del test con sinonimi mai visti in training |
 | `src/evaluation/demo_clip_esterne.py` | demo su clip esterne (Pexels): figura frasi × clip e `--query` per frasi libere |
 | `experiments/demo/clips.csv` | clip della demo: frase, taglio, file originale, link e licenza (i video stanno in `data/demo/clips/`) |

@@ -1,7 +1,9 @@
 """Griglia di iperparametri della Fase P4: lancia train.py una volta per configurazione.
 
-Griglia completa, 48 config: lr x dropout x tau x batch x d. Gli altri iperparametri restano
-ai default di train.py (MPNet, H=1024, weight decay 1e-2, patience 10, CPU).
+La griglia sta in experiments/configs/grid.yaml (--grid per usare un altro file): per ogni
+opzione di train.py la lista dei valori da provare. Quella di P4 e' completa, 48 config:
+lr x dropout x tau x batch x d. Gli altri iperparametri restano ai default di train.py
+(MPNet, H=1024, weight decay 1e-2, patience 10, CPU).
 
 Ogni run gira in un processo separato, cosi' parte sempre da zero (seed, memoria).
 Una run e' fatta se il suo log mostra un training finito (early stopping o ultima epoca)
@@ -22,6 +24,7 @@ Uso:
     caffeinate -i python src/training/grid.py --group griglia   # tutta la griglia, seed 0
     python src/training/grid.py --seeds 1 2 --only <nome_s0> <nome_s0> ...
     python src/training/grid.py --positives classe --seeds 0 1 2 --only <nome_s0>
+    python src/training/grid.py --grid experiments/configs/<altra_griglia>.yaml --dry-run
 """
 import argparse
 import csv
@@ -31,32 +34,47 @@ import sys
 import time
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 # pylint: disable=wrong-import-position
 from training.train import CKPT_DIR, CRITERION, LOG_DIR, POSITIVES, parse_args  # noqa: E402
 
 TRAIN = ROOT / "src/training/train.py"
-GRID = {
-    "lr": [1e-4, 1e-3],
-    "dropout": [0.1, 0.3],
-    "fixed_tau": [True, False],
-    "batch": [128, 256, 512],
-    "dim": [128, 256],
-}
+GRID_FILE = ROOT / "experiments/configs/grid.yaml"
 
 
-def configs():
-    """Tutte le combinazioni della griglia, come dict iperparametro -> valore."""
-    return [dict(zip(GRID, values)) for values in itertools.product(*GRID.values())]
+def load_grid(path=GRID_FILE):
+    """Legge la griglia dal YAML: dict opzione di train.py -> lista dei valori da provare."""
+    with open(path, encoding="utf-8") as f:
+        grid = yaml.safe_load(f) or {}
+    bad = [k for k, v in grid.items() if not isinstance(v, list) or not v]
+    if not grid or bad:
+        raise SystemExit(f"{path}: ogni opzione deve avere una lista non vuota di valori {bad}")
+    return grid
+
+
+def configs(grid=None):
+    """Tutte le combinazioni della griglia (default: GRID_FILE), come dict opzione -> valore."""
+    grid = load_grid() if grid is None else grid
+    return [dict(zip(grid, values)) for values in itertools.product(*grid.values())]
 
 
 def to_argv(config, seed, positives="diag"):
-    """Argomenti di train.py per una config, un seed e una scelta dei positivi della loss."""
-    argv = ["--lr", f"{config['lr']:g}", "--dropout", str(config["dropout"]),
-            "--batch", str(config["batch"]), "--dim", str(config["dim"]), "--seed", str(seed)]
-    if config["fixed_tau"]:
-        argv.append("--fixed-tau")
+    """Argomenti di train.py per una config, un seed e una scelta dei positivi della loss.
+
+    {"lr": 0.0001, "fixed_tau": True} -> ["--lr", "0.0001", "--fixed-tau", ...]: argparse di
+    train.py controlla tipi e nomi, quindi un'opzione sbagliata nel YAML da' errore.
+    """
+    argv = []
+    for key, value in config.items():
+        flag = "--" + key.replace("_", "-")
+        if isinstance(value, bool):        # opzioni si'/no: il flag c'e' oppure no
+            argv += [flag] if value else []
+        else:
+            argv += [flag, str(value)]
+    argv += ["--seed", str(seed)]
     if positives != "diag":
         argv += ["--positives", positives]
     return argv
@@ -77,9 +95,9 @@ def is_complete(args):
     return len(values) - 1 - best >= args.patience
 
 
-def plan(seeds, only, positives="diag"):
-    """Lista di (argv, args) delle run richieste, nell'ordine della griglia."""
-    grid = configs()
+def plan(seeds, only, positives="diag", grid=None):
+    """Lista di (argv, args) delle run richieste, nell'ordine della griglia (default: GRID_FILE)."""
+    grid = configs(grid)
     if only:
         by_name = {parse_args(to_argv(c, 0)).name: c for c in grid}
         unknown = [n for n in only if n not in by_name]
@@ -97,6 +115,8 @@ def main():
     """Lancia le run non ancora finite, una alla volta, e riassume com'e' andata."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--grid", default=GRID_FILE, help="file YAML della griglia "
+                        "(default experiments/configs/grid.yaml)")
     parser.add_argument("--seeds", nargs="+", type=int, default=[0])
     parser.add_argument("--only", nargs="+", help="solo queste config (nomi delle run al seed 0)")
     parser.add_argument("--positives", default="diag", choices=POSITIVES,
@@ -108,7 +128,7 @@ def main():
     # opzioni solo di logging: si aggiungono al lancio, non entrano nel nome della run
     extra = ["--wandb-mode", args.wandb_mode] + (["--group", args.group] if args.group else [])
 
-    runs = plan(args.seeds, args.only, args.positives)
+    runs = plan(args.seeds, args.only, args.positives, load_grid(args.grid))
     todo = [(argv, a) for argv, a in runs if not is_complete(a)]
     print(f"run richieste {len(runs)}: gia' finite {len(runs) - len(todo)}, da fare {len(todo)}")
     if args.dry_run:

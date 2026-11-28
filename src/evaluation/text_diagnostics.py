@@ -9,7 +9,7 @@
 Si lavora sulle frasi uniche di train + val (il test resta fuori), altrimenti le frasi
 ripetute ("take plate" compare molte volte) gonfierebbero i numeri.
 
-Output: tabella a schermo e experiments/logs/text_diagnostics.csv
+Output: tabella a schermo e experiments/results/text_diagnostics.csv
 """
 import argparse
 import collections
@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from utils.features import TEXT_DIR, l2_normalize, load_split, write_csv  # noqa: E402
 
 ENCODERS = ["bert", "mpnet", "clip"]
-OUT = ROOT / "experiments/logs/text_diagnostics.csv"
+OUT = ROOT / "experiments/results/text_diagnostics.csv"
 EXAMPLES = ["take plate", "open fridge", "cut onion"]
 
 

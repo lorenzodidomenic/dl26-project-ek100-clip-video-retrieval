@@ -12,7 +12,7 @@ Per ogni text encoder, sulle stesse clip:
 Una volta sola, come riferimento:
 - CKA(video, etichette verbo) e CKA(video, etichette nome): il video cattura piu' azioni o oggetti?
 
-Output: tabella a schermo e experiments/logs/representation_similarity.csv
+Output: tabella a schermo e experiments/results/representation_similarity.csv
 """
 import argparse
 import sys
@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from utils.features import load_pair, write_csv  # noqa: E402
 
 ENCODERS = ["bert", "mpnet", "clip"]
-OUT = ROOT / "experiments/logs/representation_similarity.csv"
+OUT = ROOT / "experiments/results/representation_similarity.csv"
 
 
 def linear_cka(x, y):

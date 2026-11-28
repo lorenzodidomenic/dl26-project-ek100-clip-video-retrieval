@@ -23,8 +23,8 @@ test era gia' stato visto una volta e che le regole di scelta non sono cambiate.
 | Modello finale: MPNet, H=1024, d=128, dropout 0.3, lr 1e-4, batch 256, τ fissa, loss `classe` (3 seed) | `experiments/final/classe_s{0,1,2}.ckpt` |
 | Confronto: stessa config, loss `diag` (InfoNCE classica, 3 seed) | `experiments/final/diag_s{0,1,2}.ckpt` |
 | Storia della scelta, metriche val, sha256 dei file | `experiments/final/manifest.json` |
-| Ridge sul val (dataset completo): λ = 1000 | `experiments/logs/linear_alignment.csv` |
-| Baseline casuale sul test (solo metriche esatte) | `experiments/logs/baseline_zero_shot.csv` |
+| Ridge sul val (dataset completo): λ = 1000 | `experiments/results/linear_alignment.csv` |
+| Baseline casuale sul test (solo metriche esatte) | `experiments/results/baseline_zero_shot.csv` |
 
 Valori sul val (media ± dev. std su 3 seed):
 
@@ -124,7 +124,7 @@ Il test non viene toccato. I numeri devono **riprodurre** quelli gia' noti:
 | Riga | Deve coincidere con |
 |---|---|
 | MLP `diag` e `classe`, ogni seed | metriche `val` del `manifest.json` |
-| Ridge | riga λ=1000 di `experiments/logs/linear_alignment.csv` |
+| Ridge | riga λ=1000 di `experiments/results/linear_alignment.csv` |
 | Baseline | circa il caso (esatto R@10 ≈ 10/N) |
 
 **Controllo:** differenze nulle (al massimo arrotondamento a 0.01). Se qualcosa non coincide, si
@@ -154,18 +154,18 @@ Domande a cui rispondere, nell'ordine:
 **Annotare:** una frase di risposta per ogni domanda. Diventano il testo della relazione.
 
 ### Passo 6 · Figure
-Script `src/evaluation/p6_figures.py`. Usa il seed 0 delle MLP (D4) e il seed 42 della baseline
+Script `src/evaluation/final_figures.py`. Usa il seed 0 delle MLP (D4) e il seed 42 della baseline
 (il primo dei suoi 10), fissati prima di disegnare.
-- `figures/p6_recall_k.png`: curva R@K al variare di K, da 1 a N (asse x logaritmico), pannelli
+- `figures/test_recall_k.png`: curva R@K al variare di K, da 1 a N (asse x logaritmico), pannelli
   esatto e classe: baseline casuale ("prima del training"), ridge, MLP `diag`, MLP `classe`
   ("dopo"). Scelta al posto dell'istogramma dei ranghi: a K = 1, 5, 10 la curva vale le R@K della
   tabella, e le curve non si coprono. Usa i ranghi salvati al passo 4.
-- `figures/p6_risultati.png`: la tabella finale come barre. Pannelli esatto e classe; per R@1, R@5,
+- `figures/test_risultati.png`: la tabella finale come barre. Pannelli esatto e classe; per R@1, R@5,
   R@10 una barra per modello (baseline, ridge, MLP `diag`, MLP `classe`), barre di errore = dev.
   std sui seed (D4). Legge `final_test.csv`.
-- `figures/p6_zero_shot.png`: R@10 (esatto e classe) su tutte le query e sulle 420 con combinazione
+- `figures/test_combinazioni_nuove.png`: R@10 (esatto e classe) su tutte le query e sulle 420 con combinazione
   verbo+nome mai vista nel train (D3). Nomi mai visti (24) solo in tabella.
-- `figures/p6_matrice_similarita.png`: matrice frasi × video "stile CLIP" su 30 clip del test, MLP
+- `figures/test_matrice_similarita.png`: matrice frasi × video "stile CLIP" su 30 clip del test, MLP
   `diag` e `classe` (seed 0). In ogni cella la probabilita' che la frase scelga quel video tra i 30
   (softmax della riga, τ = 0.07, la τ fissa dei modelli). Mostra il trade-off della loss: `diag`
   concentra la probabilita' sulla diagonale (coppia esatta), `classe` la distribuisce nel blocco

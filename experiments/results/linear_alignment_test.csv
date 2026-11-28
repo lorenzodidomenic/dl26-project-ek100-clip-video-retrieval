@@ -1,0 +1,4 @@
+encoder,lambda,esatto_R@1,esatto_R@5,esatto_R@10,esatto_rango_mediano,nuove_esatto_R@1,nuove_esatto_R@5,nuove_esatto_R@10,nuove_esatto_rango_mediano,classe_R@1,classe_R@5,classe_R@10,classe_rango_mediano,nuove_classe_R@1,nuove_classe_R@5,nuove_classe_R@10,nuove_classe_rango_mediano
+bert,100.0,0.98,3.57,5.9,594.0,0.24,2.38,3.81,946.0,16.38,35.0,45.58,15.0,1.9,4.76,5.48,552.0
+mpnet,1000.0,1.07,3.85,6.33,491.0,0.95,3.33,5.71,628.5,16.67,37.59,50.16,10.0,4.05,5.71,10.48,475.0
+caso,,0.0,0.02,0.05,4866.0,0.0,0.0,0.0,5044.0,0.42,2.38,5.09,236.0,0.0,0.0,0.48,2845.5

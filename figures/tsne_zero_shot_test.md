@@ -1,10 +1,10 @@
 # Ripasso: P7 · t-SNE delle combinazioni mai viste (test)
 
-![t-SNE zero-shot](p7_tsne_zero_shot_test.png)
+![t-SNE zero-shot](tsne_zero_shot_test.png)
 
 ## Cosa mostra
 - **Solo il modello finale**: MLP con loss `classe`, seed 0.
-- **Punti nel fit**: le stesse 2000 clip a caso della figura `p7_tsne_spazio_appreso_test.png`,
+- **Punti nel fit**: le stesse 2000 clip a caso della figura `tsne_spazio_appreso_test.png`,
   più **tutte le 420 clip del test con combinazione verbo+nome assente dal train** (D3, la
   metrica zero-shot principale). 90 delle 420 erano già nel campione a caso, quindi in tutto
   sono 2330 clip, cioè 4660 punti.
