@@ -18,8 +18,8 @@ finiti si applica la regola di scelta della roadmap:
    dropout piu' alto, poi la media.
 
 Output:
-- experiments/logs/griglia_risultati.csv: una riga per run al seed 0, ordinate per classe_R@10
-- experiments/logs/griglia_seed.csv: le prime 5, media e dev. std sui seed (se ci sono)
+- experiments/results/griglia_risultati.csv: una riga per run al seed 0, ordinate per classe_R@10
+- experiments/results/griglia_seed.csv: le prime 5, media e dev. std sui seed (se ci sono)
 - figures/griglia_effetti_principali.png, figures/griglia_seed.png
 - figures/griglia_heatmap_batch_tau.png e figures/griglia_heatmap_lr_dropout.png
 A schermo: effetti principali, prime 10 run, comando per i seed, riassunto dei seed e scelta.
@@ -41,8 +41,8 @@ from training import grid  # noqa: E402
 from training.train import CRITERION, ridge_reference  # noqa: E402
 from utils.features import write_csv  # noqa: E402
 
-OUT = ROOT / "experiments/logs/griglia_risultati.csv"
-OUT_SEED = ROOT / "experiments/logs/griglia_seed.csv"
+OUT = ROOT / "experiments/results/griglia_risultati.csv"
+OUT_SEED = ROOT / "experiments/results/griglia_seed.csv"
 FIG_DIR = ROOT / "figures"
 TOP = 5
 SEEDS = (0, 1, 2)

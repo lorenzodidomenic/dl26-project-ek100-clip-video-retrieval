@@ -16,8 +16,8 @@ La riga "caso" usa similarita' casuali: e' il valore del retrieval senza alcuna 
 Con --split test non si sceglie nulla: per ogni encoder si usa il λ migliore sul val
 (dal log di val) e si valuta una sola volta sul test, come riferimento.
 
-Output: tabella a schermo e experiments/logs/linear_alignment.csv (tutte le combinazioni
-encoder x λ), oppure experiments/logs/linear_alignment_test.csv con --split test.
+Output: tabella a schermo e experiments/results/linear_alignment.csv (tutte le combinazioni
+encoder x λ), oppure experiments/results/linear_alignment_test.csv con --split test.
 """
 import argparse
 import csv
@@ -35,8 +35,8 @@ from utils.features import l2_normalize, load_pair, write_csv  # noqa: E402
 ENCODERS = ["bert", "mpnet", "clip"]
 LAMBDAS = [1, 10, 100, 1000, 10000, 100000]
 CRITERION = "classe_R@10"
-OUT = ROOT / "experiments/logs/linear_alignment.csv"
-OUT_TEST = ROOT / "experiments/logs/linear_alignment_test.csv"
+OUT = ROOT / "experiments/results/linear_alignment.csv"
+OUT_TEST = ROOT / "experiments/results/linear_alignment_test.csv"
 
 
 def standardize(train, other):

@@ -23,8 +23,8 @@ test era gia' stato visto una volta e che le regole di scelta non sono cambiate.
 | Modello finale: MPNet, H=1024, d=128, dropout 0.3, lr 1e-4, batch 256, τ fissa, loss `classe` (3 seed) | `experiments/final/classe_s{0,1,2}.ckpt` |
 | Confronto: stessa config, loss `diag` (InfoNCE classica, 3 seed) | `experiments/final/diag_s{0,1,2}.ckpt` |
 | Storia della scelta, metriche val, sha256 dei file | `experiments/final/manifest.json` |
-| Ridge sul val (dataset completo): λ = 1000 | `experiments/logs/linear_alignment.csv` |
-| Baseline casuale sul test (solo metriche esatte) | `experiments/logs/baseline_zero_shot.csv` |
+| Ridge sul val (dataset completo): λ = 1000 | `experiments/results/linear_alignment.csv` |
+| Baseline casuale sul test (solo metriche esatte) | `experiments/results/baseline_zero_shot.csv` |
 
 Valori sul val (media ± dev. std su 3 seed):
 
@@ -124,7 +124,7 @@ Il test non viene toccato. I numeri devono **riprodurre** quelli gia' noti:
 | Riga | Deve coincidere con |
 |---|---|
 | MLP `diag` e `classe`, ogni seed | metriche `val` del `manifest.json` |
-| Ridge | riga λ=1000 di `experiments/logs/linear_alignment.csv` |
+| Ridge | riga λ=1000 di `experiments/results/linear_alignment.csv` |
 | Baseline | circa il caso (esatto R@10 ≈ 10/N) |
 
 **Controllo:** differenze nulle (al massimo arrotondamento a 0.01). Se qualcosa non coincide, si

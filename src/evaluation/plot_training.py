@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt  # noqa: E402  pylint: disable=wrong-import-posi
 
 ROOT = Path(__file__).resolve().parents[2]
 LOG_DIR = ROOT / "experiments/logs"
-RIDGE_LOG = LOG_DIR / "linear_alignment.csv"
+RIDGE_LOG = ROOT / "experiments/results/linear_alignment.csv"
 FIG_DIR = ROOT / "figures"
 CRITERION = "classe_R@10"
 ENCODERS = ("bert", "mpnet", "clip")

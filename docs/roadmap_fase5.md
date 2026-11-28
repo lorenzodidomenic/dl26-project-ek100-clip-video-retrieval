@@ -247,8 +247,8 @@ Regole:
 6. Chiusura: config scelta documentata qui e nel report.
 
 **Output:**
-- `experiments/logs/griglia_risultati.csv`: 48 run ordinate per criterio.
-- `experiments/logs/griglia_seed.csv`: prime 5, media ± deviazione standard su 3 seed.
+- `experiments/results/griglia_risultati.csv`: 48 run ordinate per criterio.
+- `experiments/results/griglia_seed.csv`: prime 5, media ± deviazione standard su 3 seed.
 
 **Visualizzazioni:**
 - Effetti principali: per ogni iperparametro, media ± deviazione standard di R@10 classe per valore, con il ridge come riferimento (`figures/griglia_effetti_principali.png`).
@@ -264,7 +264,7 @@ Regole:
 - Effetti principali (48 run): d 256 > 128 (+1.0), τ fissa > appresa (+0.8), lr 1e-4 > 1e-3 (+0.7); dropout (+0.2) e batch (≤ 0.2) quasi ininfluenti. Tutte le 48 run battono il ridge (59.6): il minimo è 65.5.
 - Nota: sulla singola leva d=256 è meglio, ma la config scelta ha d=128. Gli effetti principali sono medie su tutte le altre leve, mentre la scelta riguarda una combinazione precisa; con il rumore osservato non c'è contraddizione.
 - Il guadagno rispetto alla config di partenza di P3 (68.5, un solo seed) è circa +0.8: con questi dati gli iperparametri contano poco rispetto al salto dal ridge (circa +9).
-- File: `experiments/logs/griglia_risultati.csv`, `griglia_seed.csv`; figure `griglia_effetti_principali.png`, `griglia_heatmap_*.png`, `griglia_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
+- File: `experiments/results/griglia_risultati.csv`, `griglia_seed.csv`; figure `griglia_effetti_principali.png`, `griglia_heatmap_*.png`, `griglia_seed.png`. Archiviati in `subset4p` (vedi sezione 5).
 
 **Esito (dataset completo, val, pipeline v2).** Griglia e seed rifatti da zero con le stesse
 regole (dettagli in `experiments/final/manifest.json`):
@@ -301,7 +301,7 @@ dichiarato come informativo.
 
 MPNet è migliore su tutte le metriche e per tutti i modelli allenati (anche ridge e MLP `diag`).
 Lo scarto più grande è sulle combinazioni nuove (+5 punti). File: `src/evaluation/encoder_compare.py`,
-`experiments/final/final_test_bert.csv`, `experiments/logs/encoder_compare.csv`.
+`experiments/final/final_test_bert.csv`, `experiments/results/encoder_compare.csv`.
 
 ### P6 · Valutazione finale sul test
 **Obiettivo:** il numero del report.

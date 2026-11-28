@@ -16,7 +16,7 @@ alla pari se la differenza e' minore della dev. std maggiore delle due; altrimen
 l'encoder migliore (per il rango mediano vince il piu' basso).
 
 Uso: python src/evaluation/encoder_compare.py
-Output: experiments/logs/encoder_compare.csv, una riga per modello e encoder (valore e dev. std).
+Output: experiments/results/encoder_compare.csv, una riga per modello e encoder (valore e dev. std).
 """
 import csv
 import sys
@@ -33,7 +33,7 @@ MODELS = ("caso", "baseline", "ridge", "mlp_diag", "mlp_classe")
 METRICS = ("esatto_R@1", "esatto_R@5", "esatto_R@10", "esatto_rango_mediano", "classe_R@1",
            "classe_R@10", "nuove_classe_R@10")
 LOWER_IS_BETTER = ("esatto_rango_mediano",)
-OUT = ROOT / "experiments/logs/encoder_compare.csv"
+OUT = ROOT / "experiments/results/encoder_compare.csv"
 
 
 def read_results(encoder):
